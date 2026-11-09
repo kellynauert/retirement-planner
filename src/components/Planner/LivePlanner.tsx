@@ -70,10 +70,8 @@ export function LivePlanner({ state }: LivePlannerProps) {
 
   // Current year 1 cash flow (first full year of contributions)
   const surplusRow = rows[1] ?? rows[0];
-  const fraction = surplusPct / 100;
-  // annualSurplusBeforeInvest is already the post-fraction invested amount
+  const annualTotal = surplusRow.annualDiscretionarySurplus;
   const annualInvestable = surplusRow.annualSurplusBeforeInvest;
-  const annualTotal = fraction > 0 ? annualInvestable / fraction : 0;
   const annualSpendable = annualTotal - annualInvestable;
 
   // Chart data - every year

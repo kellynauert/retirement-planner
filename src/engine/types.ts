@@ -113,9 +113,14 @@ export interface ProjectionRow {
   person1Working: boolean;
   person2Working: boolean;
 
-  /** Cash surplus available to invest (before allocation between people) */
+  /**
+   * Total discretionary cash surplus before the invested-fraction split.
+   * annualSurplusBeforeInvest = annualDiscretionarySurplus * surplusInvestedFraction.
+   */
+  annualDiscretionarySurplus: number;
+  /** Cash surplus flowing to brokerage (= annualDiscretionarySurplus × surplusInvestedFraction) */
   annualSurplusBeforeInvest: number;
-  /** Net monthly discretionary surplus (surplus / 12) */
+  /** Net monthly discretionary surplus (annualDiscretionarySurplus / 12) */
   monthlyDiscretionarySurplus: number;
 
   /** Person 1 portfolio withdrawal (0 during accumulation; amount once retired) */

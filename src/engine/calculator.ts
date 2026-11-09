@@ -101,7 +101,7 @@ export function computeAnnualExpenses(
  * employee 401k contributions are still subject to FICA taxes.
  * Income tax is applied to income net of pre-tax 401k contributions (traditional 401k).
  */
-export function computeAnnualSurplus(params: {
+interface SurplusParams {
   salary1: number;
   salary2: number;
   bonus1: number;
@@ -113,29 +113,22 @@ export function computeAnnualSurplus(params: {
   incomeTaxRate: number;
   ficaRate: number;
   surplusInvestedFraction: number;
-}): number {
-  const {
-    salary1,
-    salary2,
-    bonus1,
-    contrib401k1,
-    contrib401k2,
-    roth1,
-    roth2,
-    annualExpenses,
-    incomeTaxRate,
-    ficaRate,
-    surplusInvestedFraction,
-  } = params;
+}
 
-  const grossIncome = salary1 + salary2 + bonus1;
-  const incomeAfter401k = grossIncome - contrib401k1 - contrib401k2;
-  const afterTaxIncome = incomeAfter401k * (1 - incomeTaxRate);
-  const ficaObligation = grossIncome * ficaRate;
+/** Shared intermediate calculations for the both-working surplus formula. */
+function computeAnnualSurplusComponents(p: SurplusParams) {
+  const grossIncome = p.salary1 + p.salary2 + p.bonus1;
+  const incomeAfter401k = grossIncome - p.contrib401k1 - p.contrib401k2;
+  const afterTaxIncome = incomeAfter401k * (1 - p.incomeTaxRate);
+  const ficaObligation = grossIncome * p.ficaRate;
   const takeHome = afterTaxIncome - ficaObligation;
-  const afterExpensesAndRoth = takeHome - annualExpenses - roth1 - roth2;
+  const afterExpensesAndRoth = takeHome - p.annualExpenses - p.roth1 - p.roth2;
+  return { grossIncome, incomeAfter401k, ficaObligation, takeHome, afterExpensesAndRoth };
+}
 
-  return Math.max(0, afterExpensesAndRoth) * surplusInvestedFraction;
+export function computeAnnualSurplus(params: SurplusParams): number {
+  const { afterExpensesAndRoth } = computeAnnualSurplusComponents(params);
+  return Math.max(0, afterExpensesAndRoth) * params.surplusInvestedFraction;
 }
 
 /**
@@ -160,6 +153,7 @@ function computeSurplusStaggered(params: {
   person1ExpenseShare: number;
 }): {
   surplus: number;
+  rawSurplus: number;
   person1Withdrawal: number;
   person2Withdrawal: number;
   cashFlowDeficit: number;
@@ -171,35 +165,31 @@ function computeSurplusStaggered(params: {
   let cashFlowDeficit = 0;
 
   if (!params.person1Working && !params.person2Working) {
-    // Both retired — no employment income, both portfolios fund expenses
     person1Withdrawal = params.annualExpenses * params.person1ExpenseShare;
     person2Withdrawal = params.annualExpenses * person2ExpenseShare;
-    return { surplus: 0, person1Withdrawal, person2Withdrawal, cashFlowDeficit: 0 };
+    return { surplus: 0, rawSurplus: 0, person1Withdrawal, person2Withdrawal, cashFlowDeficit: 0 };
   }
 
   if (!params.person1Working && params.person2Working) {
-    // Person 1 retired, person 2 still working
-    // Person 1's portfolio funds their share of expenses
     person1Withdrawal = params.annualExpenses * params.person1ExpenseShare;
 
-    // Person 2's gross income, net of 401k and taxes, funds the rest
-    const gross2 = params.salary2 + 0; // no bonus for person 2 by design
+    const gross2 = params.salary2 + 0;
     const afterTax2 =
       (gross2 - params.contrib401k2) * (1 - params.incomeTaxRate) -
       gross2 * params.ficaRate;
     const person2ExpenseObligation = params.annualExpenses * person2ExpenseShare;
     const afterExpenses2 = afterTax2 - person2ExpenseObligation - params.roth2;
-    const surplus = Math.max(0, afterExpenses2) * params.surplusInvestedFraction;
+    const rawSurplus = Math.max(0, afterExpenses2);
+    const surplus = rawSurplus * params.surplusInvestedFraction;
 
     if (afterTax2 < person2ExpenseObligation) {
       cashFlowDeficit = person2ExpenseObligation - afterTax2;
     }
 
-    return { surplus, person1Withdrawal, person2Withdrawal: 0, cashFlowDeficit };
+    return { surplus, rawSurplus, person1Withdrawal, person2Withdrawal: 0, cashFlowDeficit };
   }
 
   if (params.person1Working && !params.person2Working) {
-    // Person 2 retired, person 1 still working
     person2Withdrawal = params.annualExpenses * person2ExpenseShare;
 
     const gross1 = params.salary1 + params.bonus1;
@@ -208,30 +198,21 @@ function computeSurplusStaggered(params: {
       gross1 * params.ficaRate;
     const person1ExpenseObligation = params.annualExpenses * params.person1ExpenseShare;
     const afterExpenses1 = afterTax1 - person1ExpenseObligation - params.roth1;
-    const surplus = Math.max(0, afterExpenses1) * params.surplusInvestedFraction;
+    const rawSurplus = Math.max(0, afterExpenses1);
+    const surplus = rawSurplus * params.surplusInvestedFraction;
 
     if (afterTax1 < person1ExpenseObligation) {
       cashFlowDeficit = person1ExpenseObligation - afterTax1;
     }
 
-    return { surplus, person1Withdrawal: 0, person2Withdrawal, cashFlowDeficit };
+    return { surplus, rawSurplus, person1Withdrawal: 0, person2Withdrawal, cashFlowDeficit };
   }
 
   // Both working — standard surplus calculation
-  const surplus = computeAnnualSurplus({
-    salary1: params.salary1,
-    salary2: params.salary2,
-    bonus1: params.bonus1,
-    contrib401k1: params.contrib401k1,
-    contrib401k2: params.contrib401k2,
-    roth1: params.roth1,
-    roth2: params.roth2,
-    annualExpenses: params.annualExpenses,
-    incomeTaxRate: params.incomeTaxRate,
-    ficaRate: params.ficaRate,
-    surplusInvestedFraction: params.surplusInvestedFraction,
-  });
-  return { surplus, person1Withdrawal: 0, person2Withdrawal: 0, cashFlowDeficit: 0 };
+  const { afterExpensesAndRoth } = computeAnnualSurplusComponents(params);
+  const rawSurplus = Math.max(0, afterExpensesAndRoth);
+  const surplus = rawSurplus * params.surplusInvestedFraction;
+  return { surplus, rawSurplus, person1Withdrawal: 0, person2Withdrawal: 0, cashFlowDeficit: 0 };
 }
 
 /** Build the annual monthly expenses total from categories. */
@@ -308,6 +289,7 @@ export function runProjection(state: AppState): ProjectionRow[] {
     householdAnnualExpenses: year0Expenses,
     person1Working: p1Working0,
     person2Working: p2Working0,
+    annualDiscretionarySurplus: 0,
     annualSurplusBeforeInvest: 0,
     monthlyDiscretionarySurplus: 0,
     person1Withdrawal: 0,
@@ -337,7 +319,7 @@ export function runProjection(state: AppState): ProjectionRow[] {
 
     const annualExpenses = computeAnnualExpenses(baseAnnualExpenses, annualSpendingGrowth, n);
 
-    const { surplus, person1Withdrawal, person2Withdrawal, cashFlowDeficit } =
+    const { surplus, rawSurplus, person1Withdrawal, person2Withdrawal, cashFlowDeficit } =
       computeSurplusStaggered({
         salary1,
         salary2: salary2 + bonus2,
@@ -399,8 +381,9 @@ export function runProjection(state: AppState): ProjectionRow[] {
       householdAnnualExpenses: annualExpenses,
       person1Working: p1Working,
       person2Working: p2Working,
+      annualDiscretionarySurplus: rawSurplus,
       annualSurplusBeforeInvest: surplus,
-      monthlyDiscretionarySurplus: surplus / 12,
+      monthlyDiscretionarySurplus: rawSurplus / 12,
       person1Withdrawal,
       person2Withdrawal,
       cashFlowDeficit,
