@@ -1,7 +1,7 @@
 import React from 'react';
-import { BarChart2, Home, DollarSign, ShoppingCart, Target, TrendingUp, Settings, Download, Upload, RotateCcw } from 'lucide-react';
+import { BarChart2, Home, DollarSign, ShoppingCart, Target, TrendingUp, Settings, Download, Upload, RotateCcw, Sliders } from 'lucide-react';
 
-type Section = 'dashboard' | 'income' | 'expenses' | 'goals' | 'projections' | 'settings';
+type Section = 'dashboard' | 'planner' | 'income' | 'expenses' | 'goals' | 'projections' | 'settings';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -12,8 +12,9 @@ interface LayoutProps {
   onReset: () => void;
 }
 
-const NAV_ITEMS: { id: Section; label: string; icon: React.ComponentType<{ size?: number; className?: string }> }[] = [
+const NAV_ITEMS: { id: Section; label: string; icon: React.ComponentType<{ size?: number; className?: string }>; badge?: string }[] = [
   { id: 'dashboard', label: 'Dashboard', icon: Home },
+  { id: 'planner', label: 'Live Planner', icon: Sliders, badge: 'Interactive' },
   { id: 'income', label: 'Household Income', icon: DollarSign },
   { id: 'expenses', label: 'Expenses', icon: ShoppingCart },
   { id: 'goals', label: 'Retirement Goals', icon: Target },
@@ -41,7 +42,7 @@ export function Layout({ children, activeSection, onNavigate, onExportJSON, onIm
 
         {/* Nav */}
         <nav className="flex-1 p-3 space-y-0.5">
-          {NAV_ITEMS.map(({ id, label, icon: Icon }) => (
+          {NAV_ITEMS.map(({ id, label, icon: Icon, badge }) => (
             <button
               key={id}
               onClick={() => onNavigate(id)}
@@ -52,7 +53,12 @@ export function Layout({ children, activeSection, onNavigate, onExportJSON, onIm
               }`}
             >
               <Icon size={16} />
-              {label}
+              <span className="flex-1 text-left">{label}</span>
+              {badge && (
+                <span className="text-[9px] font-semibold uppercase tracking-wide bg-indigo-500/20 text-indigo-300 px-1.5 py-0.5 rounded">
+                  {badge}
+                </span>
+              )}
             </button>
           ))}
         </nav>

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Layout } from './components/Layout/Layout';
 import { Dashboard } from './components/Dashboard/Dashboard';
+import { LivePlanner } from './components/Planner/LivePlanner';
 import { Income } from './components/Income/Income';
 import { Expenses } from './components/Expenses/Expenses';
 import { FireGoals } from './components/FIRE/FireGoals';
@@ -8,7 +9,7 @@ import { Projections } from './components/Projections/Projections';
 import { Settings } from './components/Settings/Settings';
 import { useAppState } from './hooks/useAppState';
 
-type Section = 'dashboard' | 'income' | 'expenses' | 'goals' | 'projections' | 'settings';
+type Section = 'dashboard' | 'planner' | 'income' | 'expenses' | 'goals' | 'projections' | 'settings';
 
 export default function App() {
   const [section, setSection] = useState<Section>('dashboard');
@@ -27,6 +28,8 @@ export default function App() {
     switch (section) {
       case 'dashboard':
         return <Dashboard state={state} />;
+      case 'planner':
+        return <LivePlanner state={state} />;
       case 'income':
         return (
           <Income
