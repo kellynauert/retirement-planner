@@ -37,6 +37,7 @@ import type {
   StaggeredRetirementAnalysis,
 } from './types';
 import { FIRE_BENCHMARKS } from './defaults';
+import { simulateMortgage } from './mortgage';
 
 function getBonusRate(person: PersonInputs, scenario: BonusScenario): number {
   switch (scenario) {
@@ -241,8 +242,27 @@ export function runProjection(state: AppState): ProjectionRow[] {
     bonusScenario,
   } = assumptions;
 
-  const baseMonthlyExpenses = computeMonthlyExpenses(expenses.categories);
-  const baseAnnualExpenses = baseMonthlyExpenses * 12;
+  const flatMortgageMonthly =
+    expenses.categories.find((c) => c.id === 'mortgage')?.monthlyAmount ?? 0;
+  const nonMortgageAnnual =
+    computeMonthlyExpenses(expenses.categories.filter((c) => c.id !== 'mortgage')) * 12;
+  const mortgageSim = simulateMortgage({
+    projectionStartYear,
+    yearCount: projectionLength + 1,
+    mortgage: state.mortgage,
+    future: state.futureMortgage,
+    flatMonthlyPayment: flatMortgageMonthly,
+    spendingGrowthRate: annualSpendingGrowth,
+  });
+
+  const expensesForYear = (n: number) => {
+    const housing = mortgageSim.years[n];
+    return (
+      computeAnnualExpenses(nonMortgageAnnual, annualSpendingGrowth, n) +
+      housing.loanPayment +
+      housing.escrow
+    );
+  };
 
   const person1BonusRate = getBonusRate(person1, bonusScenario);
   // Person 2 has no bonus by design (all bonus rates default to 0)
@@ -257,7 +277,8 @@ export function runProjection(state: AppState): ProjectionRow[] {
   const startPortfolio2 =
     person2.starting401kBalance + person2.startingRothBalance + person2.startingBrokerageBalance;
 
-  const year0Expenses = computeAnnualExpenses(baseAnnualExpenses, annualSpendingGrowth, 0);
+  const year0Expenses = expensesForYear(0);
+  const year0Housing = mortgageSim.years[0];
   const calYear0 = projectionStartYear;
   const p1Working0 = isWorking(calYear0, projectionStartYear, 0, person1.finalWorkingYear);
   const p2Working0 = isWorking(calYear0, projectionStartYear, 0, person2.finalWorkingYear);
@@ -287,6 +308,9 @@ export function runProjection(state: AppState): ProjectionRow[] {
     person1TargetHit: person1.portfolioTarget > 0 && startPortfolio1 >= person1.portfolioTarget,
     person2TargetHit: person2.portfolioTarget > 0 && startPortfolio2 >= person2.portfolioTarget,
     householdAnnualExpenses: year0Expenses,
+    mortgagePayment: year0Housing.loanPayment,
+    mortgageBalance: year0Housing.endingBalance,
+    mortgageLoan: year0Housing.loan,
     person1Working: p1Working0,
     person2Working: p2Working0,
     annualDiscretionarySurplus: 0,
@@ -317,7 +341,8 @@ export function runProjection(state: AppState): ProjectionRow[] {
     const roth1 = computeRothContrib(person1.annualRothContrib, p1Working);
     const roth2 = computeRothContrib(person2.annualRothContrib, p2Working);
 
-    const annualExpenses = computeAnnualExpenses(baseAnnualExpenses, annualSpendingGrowth, n);
+    const annualExpenses = expensesForYear(n);
+    const housing = mortgageSim.years[n];
 
     const { surplus, rawSurplus, person1Withdrawal, person2Withdrawal, cashFlowDeficit } =
       computeSurplusStaggered({
@@ -379,6 +404,9 @@ export function runProjection(state: AppState): ProjectionRow[] {
       person1TargetHit: person1.portfolioTarget > 0 && portfolio1 >= person1.portfolioTarget,
       person2TargetHit: person2.portfolioTarget > 0 && portfolio2 >= person2.portfolioTarget,
       householdAnnualExpenses: annualExpenses,
+      mortgagePayment: housing.loanPayment,
+      mortgageBalance: housing.endingBalance,
+      mortgageLoan: housing.loan,
       person1Working: p1Working,
       person2Working: p2Working,
       annualDiscretionarySurplus: rawSurplus,

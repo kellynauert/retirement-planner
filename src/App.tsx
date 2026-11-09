@@ -13,22 +13,47 @@ type Section = 'dashboard' | 'planner' | 'income' | 'expenses' | 'projections' |
 export default function App() {
   const [section, setSection] = useState<Section>('dashboard');
   const {
+    ready,
     state,
+    saveStatus,
+    scenarios,
+    activeScenarioId,
+    activeScenarioName,
     updatePerson1,
     updatePerson2,
     updateExpenses,
     updateAssumptions,
     resetToDefaults,
+    selectScenario,
+    renameScenario,
+    saveScenarioAs,
+    deleteScenario,
+    retrySave,
     exportJSON,
     importJSON,
   } = useAppState();
+
+  if (!ready) {
+    return (
+      <div className="min-h-screen bg-gray-950 text-gray-400 flex items-center justify-center">
+        Loading your saved plans…
+      </div>
+    );
+  }
 
   function renderSection() {
     switch (section) {
       case 'dashboard':
         return <Dashboard state={state} />;
       case 'planner':
-        return <LivePlanner state={state} />;
+        return (
+          <LivePlanner
+            state={state}
+            onUpdatePerson1={updatePerson1}
+            onUpdatePerson2={updatePerson2}
+            onUpdateAssumptions={updateAssumptions}
+          />
+        );
       case 'income':
         return (
           <Income
@@ -61,10 +86,21 @@ export default function App() {
       onExportJSON={exportJSON}
       onImportJSON={importJSON}
       onReset={() => {
-        if (window.confirm('Reset all inputs to workbook defaults? This cannot be undone.')) {
+        if (window.confirm('Reset this scenario to workbook defaults? This cannot be undone.')) {
           resetToDefaults();
         }
       }}
+      scenarios={scenarios}
+      activeScenarioId={activeScenarioId}
+      activeScenarioName={activeScenarioName}
+      saveStatus={saveStatus}
+      onSelectScenario={selectScenario}
+      onRenameScenario={renameScenario}
+      onSaveScenarioAs={saveScenarioAs}
+      onDeleteScenario={() => {
+        if (window.confirm('Delete this scenario? The others stay saved.')) deleteScenario();
+      }}
+      onRetrySave={retrySave}
     >
       {renderSection()}
     </Layout>

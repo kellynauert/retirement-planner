@@ -71,6 +71,22 @@ export const DEFAULT_STATE: AppState = {
       { id: 'other', name: 'Other / miscellaneous', monthlyAmount: 0 },
     ],
   },
+  mortgage: {
+    currentBalance: 0,
+    annualInterestRate: 0.065,
+    remainingTermYears: 30,
+    extraMonthlyPayment: 0,
+    principalAlreadyPaid: 0,
+    monthlyEscrow: 0,
+  },
+  futureMortgage: {
+    enabled: false,
+    startYear: 2036,
+    purchasePrice: 0,
+    annualInterestRate: 0.065,
+    termYears: 30,
+    extraMonthlyPayment: 0,
+  },
   assumptions: {
     annualReturnRate: 0.07,
     annualSpendingGrowth: 0.035,

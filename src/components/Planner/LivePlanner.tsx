@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useMemo } from 'react';
 import {
   AreaChart,
   Area,
@@ -22,6 +22,9 @@ import { PageHeader } from '../Layout/PageHeader';
 
 interface LivePlannerProps {
   state: AppState;
+  onUpdatePerson1: (updates: Partial<AppState['person1']>) => void;
+  onUpdatePerson2: (updates: Partial<AppState['person2']>) => void;
+  onUpdateAssumptions: (updates: Partial<AppState['assumptions']>) => void;
 }
 
 const FIRE_COLORS: Record<string, string> = {
@@ -32,34 +35,16 @@ const FIRE_COLORS: Record<string, string> = {
   very_conservative: '#ef4444',
 };
 
-export function LivePlanner({ state }: LivePlannerProps) {
-  // Local overrides — changes here do NOT persist to global state
-  const [p1FinalYear, setP1FinalYear] = useState(state.person1.finalWorkingYear);
-  const [p2FinalYear, setP2FinalYear] = useState(state.person2.finalWorkingYear);
-  const [surplusPct, setSurplusPct] = useState(
-    Math.round(state.assumptions.surplusInvestedFraction * 100),
-  );
-  const [scenario, setScenario] = useState<'minimum' | 'target' | 'maximum'>('target');
+export function LivePlanner({ state, onUpdatePerson1, onUpdatePerson2, onUpdateAssumptions }: LivePlannerProps) {
+  const p1FinalYear = state.person1.finalWorkingYear;
+  const p2FinalYear = state.person2.finalWorkingYear;
+  const surplusPct = Math.round(state.assumptions.surplusInvestedFraction * 100);
+  const scenario = state.assumptions.bonusScenario;
 
   const startYear = state.assumptions.projectionStartYear;
   const endYear = startYear + state.assumptions.projectionLength;
 
-  // Build a local state with the overridden values
-  const localState = useMemo(
-    () => ({
-      ...state,
-      person1: { ...state.person1, finalWorkingYear: p1FinalYear },
-      person2: { ...state.person2, finalWorkingYear: p2FinalYear },
-      assumptions: {
-        ...state.assumptions,
-        surplusInvestedFraction: surplusPct / 100,
-        bonusScenario: scenario,
-      },
-    }),
-    [state, p1FinalYear, p2FinalYear, surplusPct, scenario],
-  );
-
-  const rows = useMemo(() => runProjection(localState), [localState]);
+  const rows = useMemo(() => runProjection(state), [state]);
 
   const baseAnnual = computeMonthlyExpenses(state.expenses.categories) * 12;
 
@@ -130,12 +115,12 @@ export function LivePlanner({ state }: LivePlannerProps) {
     <div className="min-h-screen bg-gray-950">
       <PageHeader
         title="Live Planner"
-        description="Adjust key inputs and watch the projection update instantly. Changes here are for exploration only — go to the respective sections to save changes permanently."
+        description="Adjust the plan and it saves into the scenario selected in the sidebar. Use Save as new before you experiment if you want to keep the current version."
       />
 
-      <div className="flex gap-0 h-[calc(100vh-89px)]">
+      <div className="flex flex-col xl:flex-row xl:h-[calc(100vh-89px)] min-w-0">
         {/* ── Left panel: controls ── */}
-        <div className="w-72 shrink-0 border-r border-gray-800 bg-gray-900 overflow-y-auto p-6 space-y-7">
+        <div className="w-full xl:w-72 xl:shrink-0 border-b xl:border-b-0 xl:border-r border-gray-800 bg-gray-900 overflow-y-auto p-6 space-y-7">
 
           {/* Scenario */}
           <div>
@@ -146,7 +131,7 @@ export function LivePlanner({ state }: LivePlannerProps) {
               {(['minimum', 'target', 'maximum'] as const).map((s) => (
                 <button
                   key={s}
-                  onClick={() => setScenario(s)}
+                  onClick={() => onUpdateAssumptions({ bonusScenario: s })}
                   className={`py-1.5 rounded text-xs font-medium transition-colors capitalize ${
                     scenario === s
                       ? 'bg-indigo-600 text-white'
@@ -169,7 +154,7 @@ export function LivePlanner({ state }: LivePlannerProps) {
             format={(v) => v.toString()}
             sub={`Age ${state.person1.currentAge + (p1FinalYear - startYear)}`}
             color="#6366f1"
-            onChange={setP1FinalYear}
+            onChange={(year) => onUpdatePerson1({ finalWorkingYear: year })}
           />
 
           {/* Person 2 final year */}
@@ -182,7 +167,7 @@ export function LivePlanner({ state }: LivePlannerProps) {
             format={(v) => v.toString()}
             sub={`Age ${state.person2.currentAge + (p2FinalYear - startYear)}`}
             color="#10b981"
-            onChange={setP2FinalYear}
+            onChange={(year) => onUpdatePerson2({ finalWorkingYear: year })}
           />
 
           {/* Surplus invested % */}
@@ -195,7 +180,7 @@ export function LivePlanner({ state }: LivePlannerProps) {
             format={(v) => `${v}%`}
             sub="Leftover income going to brokerage"
             color="#f59e0b"
-            onChange={setSurplusPct}
+            onChange={(pct) => onUpdateAssumptions({ surplusInvestedFraction: pct / 100 })}
           />
 
           {/* FIRE milestone legend */}
@@ -239,59 +224,27 @@ export function LivePlanner({ state }: LivePlannerProps) {
         </div>
 
         {/* ── Right panel: surplus + chart ── */}
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 min-w-0 overflow-y-auto">
 
           {/* Cash flow breakdown: spendable vs investable */}
-          <div className="grid grid-cols-2 border-b border-gray-800">
-            {/* Investable column */}
-            <div className="border-r border-gray-800">
-              <div className="px-8 pt-6 pb-2">
-                <div className="flex items-center gap-2 mb-1">
-                  <div className="w-2 h-2 rounded-full bg-emerald-400" />
-                  <span className="text-xs font-semibold text-gray-400 uppercase tracking-widest">Invested ({surplusPct}%)</span>
-                </div>
-                <div className="text-xs text-gray-600 mb-4">Flows to brokerage accounts</div>
-              </div>
-              <div className="grid grid-cols-2 divide-x divide-gray-800 border-t border-gray-800/60">
-                <div className="px-8 py-5">
-                  <div className="text-xs text-gray-500 uppercase tracking-widest mb-1">Annual</div>
-                  <div className={`text-3xl font-bold tabular-nums tracking-tight ${annualInvestable > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                    {formatCurrency(Math.max(0, annualInvestable))}
-                  </div>
-                </div>
-                <div className="px-8 py-5">
-                  <div className="text-xs text-gray-500 uppercase tracking-widest mb-1">Monthly</div>
-                  <div className={`text-3xl font-bold tabular-nums tracking-tight ${annualInvestable > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                    {formatCurrency(Math.max(0, annualInvestable / 12))}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Spendable column */}
-            <div>
-              <div className="px-8 pt-6 pb-2">
-                <div className="flex items-center gap-2 mb-1">
-                  <div className="w-2 h-2 rounded-full bg-sky-400" />
-                  <span className="text-xs font-semibold text-gray-400 uppercase tracking-widest">Spendable ({100 - surplusPct}%)</span>
-                </div>
-                <div className="text-xs text-gray-600 mb-4">Lifestyle, irregular expenses, etc.</div>
-              </div>
-              <div className="grid grid-cols-2 divide-x divide-gray-800 border-t border-gray-800/60">
-                <div className="px-8 py-5">
-                  <div className="text-xs text-gray-500 uppercase tracking-widest mb-1">Annual</div>
-                  <div className={`text-3xl font-bold tabular-nums tracking-tight ${annualSpendable > 0 ? 'text-sky-400' : 'text-gray-600'}`}>
-                    {formatCurrency(Math.max(0, annualSpendable))}
-                  </div>
-                </div>
-                <div className="px-8 py-5">
-                  <div className="text-xs text-gray-500 uppercase tracking-widest mb-1">Monthly</div>
-                  <div className={`text-3xl font-bold tabular-nums tracking-tight ${annualSpendable > 0 ? 'text-sky-400' : 'text-gray-600'}`}>
-                    {formatCurrency(Math.max(0, annualSpendable / 12))}
-                  </div>
-                </div>
-              </div>
-            </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 border-b border-gray-800 min-w-0">
+            <MoneyPanel
+              label={`Invested (${surplusPct}%)`}
+              hint="Flows to brokerage accounts"
+              dotClass="bg-emerald-400"
+              annual={Math.max(0, annualInvestable)}
+              monthly={Math.max(0, annualInvestable / 12)}
+              valueClass={annualInvestable > 0 ? 'text-emerald-400' : 'text-red-400'}
+              className="border-b md:border-b-0 md:border-r border-gray-800"
+            />
+            <MoneyPanel
+              label={`Spendable (${100 - surplusPct}%)`}
+              hint="Lifestyle, irregular expenses, etc."
+              dotClass="bg-sky-400"
+              annual={Math.max(0, annualSpendable)}
+              monthly={Math.max(0, annualSpendable / 12)}
+              valueClass={annualSpendable > 0 ? 'text-sky-400' : 'text-gray-500'}
+            />
           </div>
 
           {/* Deficit warning */}
@@ -481,6 +434,49 @@ export function LivePlanner({ state }: LivePlannerProps) {
             </div>
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function MoneyPanel({
+  label,
+  hint,
+  dotClass,
+  annual,
+  monthly,
+  valueClass,
+  className = '',
+}: {
+  label: string;
+  hint: string;
+  dotClass: string;
+  annual: number;
+  monthly: number;
+  valueClass: string;
+  className?: string;
+}) {
+  return (
+    <div className={`min-w-0 overflow-hidden p-4 sm:p-6 ${className}`}>
+      <div className="flex items-center gap-2 mb-1">
+        <div className={`w-2 h-2 rounded-full shrink-0 ${dotClass}`} />
+        <span className="text-xs font-semibold text-gray-400 uppercase tracking-widest truncate">{label}</span>
+      </div>
+      <div className="text-xs text-gray-600 mb-4">{hint}</div>
+      <div className="space-y-4">
+        <Amount label="Annual" value={annual} valueClass={valueClass} />
+        <Amount label="Monthly" value={monthly} valueClass={valueClass} />
+      </div>
+    </div>
+  );
+}
+
+function Amount({ label, value, valueClass }: { label: string; value: number; valueClass: string }) {
+  return (
+    <div className="min-w-0">
+      <div className="text-xs text-gray-500 uppercase tracking-widest mb-1">{label}</div>
+      <div className={`font-bold tabular-nums leading-none break-words ${valueClass}`} style={{ fontSize: 'clamp(1.35rem, 2.6vw, 2.25rem)' }}>
+        {formatCurrency(value)}
       </div>
     </div>
   );

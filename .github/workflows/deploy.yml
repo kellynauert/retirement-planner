@@ -22,6 +22,8 @@ jobs:
       - run: npm ci
 
       - run: npm run build
+        env:
+          VITE_BASE: /retirement-planner/
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v4

@@ -51,6 +51,41 @@ export interface HouseholdExpenses {
   categories: ExpenseCategory[];
 }
 
+/** Amortizing loan. Principal & interest does not inflate and stops at payoff. */
+export interface MortgageInputs {
+  /** Remaining principal today */
+  currentBalance: number;
+  /** Nominal annual interest rate (decimal, 0.065 = 6.5%) */
+  annualInterestRate: number;
+  /** Years left on the contractual term */
+  remainingTermYears: number;
+  /** Extra principal paid every month, on top of the contractual payment */
+  extraMonthlyPayment: number;
+  /**
+   * Principal already paid down before the projection starts.
+   * Added to simulated paydown when a future mortgage begins.
+   */
+  principalAlreadyPaid: number;
+  /**
+   * Property tax, insurance, HOA. Inflates with spending growth and continues
+   * after the loan is paid off. Leave at 0 if those are already expense categories.
+   */
+  monthlyEscrow: number;
+}
+
+export interface FutureMortgageInputs {
+  enabled: boolean;
+  /** Calendar year the new loan starts (January). The current loan ends that month. */
+  startYear: number;
+  /** Price of the next home. Principal paid off on the current loan reduces this. */
+  purchasePrice: number;
+  annualInterestRate: number;
+  termYears: number;
+  extraMonthlyPayment: number;
+}
+
+export type MortgageLoanPhase = 'flat' | 'current' | 'future' | 'none';
+
 export interface GlobalAssumptions {
   /** Annual nominal investment return rate (decimal) */
   annualReturnRate: number;
@@ -78,6 +113,8 @@ export interface AppState {
   person1: PersonInputs;
   person2: PersonInputs;
   expenses: HouseholdExpenses;
+  mortgage: MortgageInputs;
+  futureMortgage: FutureMortgageInputs;
   assumptions: GlobalAssumptions;
 }
 
@@ -111,6 +148,12 @@ export interface ProjectionRow {
   person2TargetHit: boolean;
 
   householdAnnualExpenses: number;
+
+  /** Principal, interest, and extra principal paid this year (or the flat mortgage bill). */
+  mortgagePayment: number;
+  /** Loan balance at the end of the year. */
+  mortgageBalance: number;
+  mortgageLoan: MortgageLoanPhase;
 
   person1Working: boolean;
   person2Working: boolean;
