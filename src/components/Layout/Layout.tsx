@@ -1,7 +1,7 @@
 import React from 'react';
-import { BarChart2, Home, DollarSign, ShoppingCart, Target, TrendingUp, Settings, Download, Upload, RotateCcw, Sliders } from 'lucide-react';
+import { BarChart2, Home, DollarSign, ShoppingCart, TrendingUp, Settings, Download, Upload, RotateCcw, Sliders } from 'lucide-react';
 
-type Section = 'dashboard' | 'planner' | 'income' | 'expenses' | 'goals' | 'projections' | 'settings';
+type Section = 'dashboard' | 'planner' | 'income' | 'expenses' | 'projections' | 'settings';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -17,7 +17,6 @@ const NAV_ITEMS: { id: Section; label: string; icon: React.ComponentType<{ size?
   { id: 'planner', label: 'Live Planner', icon: Sliders, badge: 'Interactive' },
   { id: 'income', label: 'Household Income', icon: DollarSign },
   { id: 'expenses', label: 'Expenses', icon: ShoppingCart },
-  { id: 'goals', label: 'Retirement Goals', icon: Target },
   { id: 'projections', label: 'Projections', icon: TrendingUp },
   { id: 'settings', label: 'Assumptions', icon: Settings },
 ];

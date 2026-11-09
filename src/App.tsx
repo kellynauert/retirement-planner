@@ -4,12 +4,11 @@ import { Dashboard } from './components/Dashboard/Dashboard';
 import { LivePlanner } from './components/Planner/LivePlanner';
 import { Income } from './components/Income/Income';
 import { Expenses } from './components/Expenses/Expenses';
-import { FireGoals } from './components/FIRE/FireGoals';
 import { Projections } from './components/Projections/Projections';
 import { Settings } from './components/Settings/Settings';
 import { useAppState } from './hooks/useAppState';
 
-type Section = 'dashboard' | 'planner' | 'income' | 'expenses' | 'goals' | 'projections' | 'settings';
+type Section = 'dashboard' | 'planner' | 'income' | 'expenses' | 'projections' | 'settings';
 
 export default function App() {
   const [section, setSection] = useState<Section>('dashboard');
@@ -35,7 +34,6 @@ export default function App() {
           <Income
             person1={state.person1}
             person2={state.person2}
-            projectionStartYear={state.assumptions.projectionStartYear}
             onUpdatePerson1={updatePerson1}
             onUpdatePerson2={updatePerson2}
           />
@@ -47,14 +45,6 @@ export default function App() {
             spendingGrowthRate={state.assumptions.annualSpendingGrowth}
             onUpdateExpenses={updateExpenses}
             onUpdateSpendingGrowth={(rate) => updateAssumptions({ annualSpendingGrowth: rate })}
-          />
-        );
-      case 'goals':
-        return (
-          <FireGoals
-            state={state}
-            onUpdatePerson1={updatePerson1}
-            onUpdatePerson2={updatePerson2}
           />
         );
       case 'projections':

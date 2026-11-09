@@ -3,7 +3,7 @@ import { Plus, Trash2, Info } from 'lucide-react';
 import type { ExpenseCategory, HouseholdExpenses } from '../../engine/types';
 import { PageHeader } from '../Layout/PageHeader';
 import { Card } from '../Layout/Card';
-import { FormField, Input } from '../Layout/FormField';
+import { FormField, NumericInput } from '../Layout/FormField';
 import { formatCurrency } from '../../engine/formatters';
 
 interface ExpensesProps {
@@ -107,14 +107,12 @@ export function Expenses({ expenses, spendingGrowthRate, onUpdateExpenses, onUpd
             label="Annual spending inflation rate"
             hint="Applied to all expense categories uniformly each year. The workbook default is 3.5%."
           >
-            <Input
-              type="number"
+            <NumericInput
               suffix="%"
               value={(spendingGrowthRate * 100).toFixed(1)}
-              step={0.1}
-              onChange={(e) => {
-                const v = parseFloat(e.target.value);
-                if (!isNaN(v)) onUpdateSpendingGrowth(v / 100);
+              onCommit={(v) => {
+                const n = parseFloat(v);
+                if (!isNaN(n)) onUpdateSpendingGrowth(n / 100);
               }}
             />
           </FormField>
@@ -139,6 +137,9 @@ function ExpenseCategoryRow({
   onChange: (amount: number) => void;
   onRemove?: () => void;
 }) {
+  const [local, setLocal] = useState<string | null>(null);
+  const display = local !== null ? local : (category.monthlyAmount || '');
+
   return (
     <div className="flex items-center gap-3 py-2 border-b border-gray-800/50 last:border-0">
       <div className="flex-1 text-sm text-gray-300">{category.name}</div>
@@ -147,12 +148,15 @@ function ExpenseCategoryRow({
         <div className="flex rounded-lg overflow-hidden border border-gray-700 focus-within:border-indigo-500">
           <span className="flex items-center px-2 bg-gray-800 text-gray-500 text-sm border-r border-gray-700">$</span>
           <input
-            type="number"
-            value={category.monthlyAmount || ''}
+            type="text"
+            inputMode="decimal"
+            value={display}
             placeholder="0"
-            onChange={(e) => {
-              const v = parseFloat(e.target.value);
+            onChange={(e) => setLocal(e.target.value)}
+            onBlur={() => {
+              const v = parseFloat(local ?? '');
               onChange(isNaN(v) ? 0 : v);
+              setLocal(null);
             }}
             className="flex-1 bg-gray-800 text-white px-2 py-1.5 text-sm outline-none min-w-0"
           />

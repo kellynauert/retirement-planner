@@ -68,10 +68,13 @@ export function LivePlanner({ state }: LivePlannerProps) {
     [rows, baseAnnual],
   );
 
-  // Current year 1 surplus (first full year of contributions)
+  // Current year 1 cash flow (first full year of contributions)
   const surplusRow = rows[1] ?? rows[0];
-  const annualSurplus = surplusRow.annualSurplusBeforeInvest;
-  const monthlySurplus = annualSurplus / 12;
+  const fraction = surplusPct / 100;
+  // annualSurplusBeforeInvest is already the post-fraction invested amount
+  const annualInvestable = surplusRow.annualSurplusBeforeInvest;
+  const annualTotal = fraction > 0 ? annualInvestable / fraction : 0;
+  const annualSpendable = annualTotal - annualInvestable;
 
   // Chart data - every year
   const chartData = rows.map((row) => ({
@@ -240,46 +243,65 @@ export function LivePlanner({ state }: LivePlannerProps) {
         {/* ── Right panel: surplus + chart ── */}
         <div className="flex-1 overflow-y-auto">
 
-          {/* Big surplus numbers */}
+          {/* Cash flow breakdown: spendable vs investable */}
           <div className="grid grid-cols-2 border-b border-gray-800">
-            <div className="p-8 border-r border-gray-800">
-              <div className="text-xs text-gray-500 uppercase tracking-widest mb-2">
-                Annual Surplus Available to Invest
-              </div>
-              <div
-                className={`text-5xl font-bold tabular-nums tracking-tight ${
-                  annualSurplus > 0 ? 'text-emerald-400' : 'text-red-400'
-                }`}
-              >
-                {formatCurrency(Math.max(0, annualSurplus))}
-              </div>
-              <div className="mt-2 text-sm text-gray-500">
-                Year 1 ({startYear + 1}) · {scenario} bonus · {surplusPct}% invested
-              </div>
-              {annualSurplus <= 0 && (
-                <div className="mt-2 text-sm text-red-400">
-                  Expenses and contributions exceed after-tax income in year 1.
+            {/* Investable column */}
+            <div className="border-r border-gray-800">
+              <div className="px-8 pt-6 pb-2">
+                <div className="flex items-center gap-2 mb-1">
+                  <div className="w-2 h-2 rounded-full bg-emerald-400" />
+                  <span className="text-xs font-semibold text-gray-400 uppercase tracking-widest">Invested ({surplusPct}%)</span>
                 </div>
-              )}
+                <div className="text-xs text-gray-600 mb-4">Flows to brokerage accounts</div>
+              </div>
+              <div className="grid grid-cols-2 divide-x divide-gray-800 border-t border-gray-800/60">
+                <div className="px-8 py-5">
+                  <div className="text-xs text-gray-500 uppercase tracking-widest mb-1">Annual</div>
+                  <div className={`text-3xl font-bold tabular-nums tracking-tight ${annualInvestable > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                    {formatCurrency(Math.max(0, annualInvestable))}
+                  </div>
+                </div>
+                <div className="px-8 py-5">
+                  <div className="text-xs text-gray-500 uppercase tracking-widest mb-1">Monthly</div>
+                  <div className={`text-3xl font-bold tabular-nums tracking-tight ${annualInvestable > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                    {formatCurrency(Math.max(0, annualInvestable / 12))}
+                  </div>
+                </div>
+              </div>
             </div>
-            <div className="p-8">
-              <div className="text-xs text-gray-500 uppercase tracking-widest mb-2">
-                Monthly Surplus Available to Invest
+
+            {/* Spendable column */}
+            <div>
+              <div className="px-8 pt-6 pb-2">
+                <div className="flex items-center gap-2 mb-1">
+                  <div className="w-2 h-2 rounded-full bg-sky-400" />
+                  <span className="text-xs font-semibold text-gray-400 uppercase tracking-widest">Spendable ({100 - surplusPct}%)</span>
+                </div>
+                <div className="text-xs text-gray-600 mb-4">Lifestyle, irregular expenses, etc.</div>
               </div>
-              <div
-                className={`text-5xl font-bold tabular-nums tracking-tight ${
-                  monthlySurplus > 0 ? 'text-emerald-400' : 'text-red-400'
-                }`}
-              >
-                {formatCurrency(Math.max(0, monthlySurplus))}
-              </div>
-              <div className="mt-2 text-sm text-gray-500">per month</div>
-              <div className="mt-3 text-xs text-gray-600">
-                After taxes, FICA, all expenses, 401(k) contributions, and Roth IRA contributions.
-                This is the amount flowing to brokerage accounts.
+              <div className="grid grid-cols-2 divide-x divide-gray-800 border-t border-gray-800/60">
+                <div className="px-8 py-5">
+                  <div className="text-xs text-gray-500 uppercase tracking-widest mb-1">Annual</div>
+                  <div className={`text-3xl font-bold tabular-nums tracking-tight ${annualSpendable > 0 ? 'text-sky-400' : 'text-gray-600'}`}>
+                    {formatCurrency(Math.max(0, annualSpendable))}
+                  </div>
+                </div>
+                <div className="px-8 py-5">
+                  <div className="text-xs text-gray-500 uppercase tracking-widest mb-1">Monthly</div>
+                  <div className={`text-3xl font-bold tabular-nums tracking-tight ${annualSpendable > 0 ? 'text-sky-400' : 'text-gray-600'}`}>
+                    {formatCurrency(Math.max(0, annualSpendable / 12))}
+                  </div>
+                </div>
               </div>
             </div>
           </div>
+
+          {/* Deficit warning */}
+          {annualTotal <= 0 && (
+            <div className="mx-6 mt-4 px-4 py-3 bg-red-950/40 border border-red-800/40 rounded-lg text-sm text-red-400">
+              Expenses and contributions exceed after-tax income in year 1 — no investable or spendable surplus.
+            </div>
+          )}
 
           {/* Chart */}
           <div className="p-6">
@@ -454,11 +476,10 @@ export function LivePlanner({ state }: LivePlannerProps) {
 
             {/* Explanation note */}
             <div className="mt-6 p-4 bg-gray-900 border border-gray-800 rounded-xl text-xs text-gray-500 leading-relaxed">
-              <strong className="text-gray-400">How surplus is calculated:</strong> Gross household income
+              <strong className="text-gray-400">How these numbers are calculated:</strong> Gross household income
               (salary + bonus) minus pre-tax 401(k) contributions, income tax ({(state.assumptions.incomeTaxRate * 100).toFixed(1)}%),
               FICA ({(state.assumptions.ficaRate * 100).toFixed(1)}%), annual expenses, and Roth IRA contributions.
-              The {surplusPct}% invested fraction then flows to brokerage accounts. Remaining {100 - surplusPct}%
-              is treated as spent (lifestyle spending, irregular expenses, etc.).
+              The resulting discretionary surplus is split: {surplusPct}% goes to brokerage (investable) and {100 - surplusPct}% is available to spend freely. All figures are year 1 ({startYear + 1}) estimates.
             </div>
           </div>
         </div>

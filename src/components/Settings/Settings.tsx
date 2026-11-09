@@ -1,7 +1,7 @@
 import type { GlobalAssumptions } from '../../engine/types';
 import { PageHeader } from '../Layout/PageHeader';
 import { Card } from '../Layout/Card';
-import { FormField, Input, Select } from '../Layout/FormField';
+import { FormField, NumericInput, Select } from '../Layout/FormField';
 import { Info } from 'lucide-react';
 
 interface SettingsProps {
@@ -42,24 +42,20 @@ export function Settings({ assumptions, onUpdate }: SettingsProps) {
               label="Annual Investment Return"
               hint="Nominal annual return applied to all account types. Workbook default: 7%."
             >
-              <Input
-                type="number"
+              <NumericInput
                 suffix="%"
                 value={(assumptions.annualReturnRate * 100).toFixed(1)}
-                step={0.1}
-                onChange={(e) => onUpdate({ annualReturnRate: pct(e.target.value) })}
+                onCommit={(v) => onUpdate({ annualReturnRate: pct(v) })}
               />
             </FormField>
             <FormField
               label="Annual Spending Growth"
               hint="Applied to household expenses each year. Workbook default: 3.5%."
             >
-              <Input
-                type="number"
+              <NumericInput
                 suffix="%"
                 value={(assumptions.annualSpendingGrowth * 100).toFixed(1)}
-                step={0.1}
-                onChange={(e) => onUpdate({ annualSpendingGrowth: pct(e.target.value) })}
+                onCommit={(v) => onUpdate({ annualSpendingGrowth: pct(v) })}
               />
             </FormField>
           </div>
@@ -71,24 +67,20 @@ export function Settings({ assumptions, onUpdate }: SettingsProps) {
               label="Blended Income Tax Rate"
               hint="Estimated effective rate on ordinary income. Workbook default: 21.43%. Applied to income net of pre-tax 401(k) contributions."
             >
-              <Input
-                type="number"
+              <NumericInput
                 suffix="%"
                 value={(assumptions.incomeTaxRate * 100).toFixed(2)}
-                step={0.01}
-                onChange={(e) => onUpdate({ incomeTaxRate: pct(e.target.value) })}
+                onCommit={(v) => onUpdate({ incomeTaxRate: pct(v) })}
               />
             </FormField>
             <FormField
               label="FICA Tax Rate"
               hint="Applies to gross wages. Workbook default: 7.65% (employee share only). The FICA wage base limit is not modeled."
             >
-              <Input
-                type="number"
+              <NumericInput
                 suffix="%"
                 value={(assumptions.ficaRate * 100).toFixed(2)}
-                step={0.01}
-                onChange={(e) => onUpdate({ ficaRate: pct(e.target.value) })}
+                onCommit={(v) => onUpdate({ ficaRate: pct(v) })}
               />
             </FormField>
           </div>
@@ -100,42 +92,30 @@ export function Settings({ assumptions, onUpdate }: SettingsProps) {
               label="Fraction of Surplus Invested"
               hint="Percentage of after-tax, after-expense cash flow invested in taxable brokerage accounts. Workbook default: 100%."
             >
-              <Input
-                type="number"
+              <NumericInput
                 suffix="%"
                 value={(assumptions.surplusInvestedFraction * 100).toFixed(0)}
-                step={1}
-                min={0}
-                max={100}
-                onChange={(e) => onUpdate({ surplusInvestedFraction: pct(e.target.value) })}
+                onCommit={(v) => onUpdate({ surplusInvestedFraction: pct(v) })}
               />
             </FormField>
             <FormField
               label="Person 1 Share of Investable Surplus"
               hint="Split of brokerage contributions between people. Workbook default: 50/50."
             >
-              <Input
-                type="number"
+              <NumericInput
                 suffix="%"
                 value={(assumptions.person1SurplusShare * 100).toFixed(0)}
-                step={1}
-                min={0}
-                max={100}
-                onChange={(e) => onUpdate({ person1SurplusShare: pct(e.target.value) })}
+                onCommit={(v) => onUpdate({ person1SurplusShare: pct(v) })}
               />
             </FormField>
             <FormField
               label="Person 1 Share of Household Expenses"
               hint="Used for staggered retirement cash flow modeling — determines how much of household expenses each person is responsible for after they stop working. Workbook default: 50%."
             >
-              <Input
-                type="number"
+              <NumericInput
                 suffix="%"
                 value={(assumptions.person1ExpenseShare * 100).toFixed(0)}
-                step={1}
-                min={0}
-                max={100}
-                onChange={(e) => onUpdate({ person1ExpenseShare: pct(e.target.value) })}
+                onCommit={(v) => onUpdate({ person1ExpenseShare: pct(v) })}
               />
             </FormField>
           </div>
@@ -144,21 +124,17 @@ export function Settings({ assumptions, onUpdate }: SettingsProps) {
         <Card title="Projection Parameters">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
             <FormField label="Projection Start Year" hint="Calendar year corresponding to year 0 of the projection.">
-              <Input
-                type="number"
+              <NumericInput
                 value={assumptions.projectionStartYear}
-                min={2020}
-                max={2100}
-                onChange={(e) => onUpdate({ projectionStartYear: num(e.target.value) })}
+                inputMode="numeric"
+                onCommit={(v) => onUpdate({ projectionStartYear: num(v) })}
               />
             </FormField>
             <FormField label="Projection Length (Years)" hint="Workbook default: 40 years.">
-              <Input
-                type="number"
+              <NumericInput
                 value={assumptions.projectionLength}
-                min={5}
-                max={60}
-                onChange={(e) => onUpdate({ projectionLength: num(e.target.value) })}
+                inputMode="numeric"
+                onCommit={(v) => onUpdate({ projectionLength: num(v) })}
               />
             </FormField>
             <FormField label="Default Bonus Scenario" hint="Used in Dashboard; Projections view shows all three.">
