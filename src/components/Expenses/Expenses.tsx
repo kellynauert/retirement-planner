@@ -6,6 +6,12 @@ import { Card } from '../Layout/Card';
 import { FormField, NumericInput } from '../Layout/FormField';
 import { formatCurrency } from '../../engine/formatters';
 
+const LOCKED_IDS = new Set([
+  'mortgage', 'utilities', 'groceries', 'transportation', 'insurance',
+  'debt', 'childcare', 'dining', 'entertainment', 'travel',
+  'subscriptions', 'clothing', 'gifts', 'other',
+]);
+
 interface ExpensesProps {
   expenses: HouseholdExpenses;
   spendingGrowthRate: number;
@@ -14,9 +20,15 @@ interface ExpensesProps {
 }
 
 export function Expenses({ expenses, spendingGrowthRate, onUpdateExpenses, onUpdateSpendingGrowth }: ExpensesProps) {
-  const [newName, setNewName] = useState('');
+  const [newRequired, setNewRequired] = useState('');
+  const [newOptional, setNewOptional] = useState('');
 
-  const totalMonthly = expenses.categories.reduce((s, c) => s + c.monthlyAmount, 0);
+  const required = expenses.categories.filter((c) => !c.optional);
+  const optional = expenses.categories.filter((c) => c.optional);
+
+  const requiredMonthly = required.reduce((s, c) => s + c.monthlyAmount, 0);
+  const optionalMonthly = optional.reduce((s, c) => s + c.monthlyAmount, 0);
+  const totalMonthly = requiredMonthly + optionalMonthly;
   const totalAnnual = totalMonthly * 12;
 
   function updateCategory(id: string, monthlyAmount: number) {
@@ -29,59 +41,71 @@ export function Expenses({ expenses, spendingGrowthRate, onUpdateExpenses, onUpd
     onUpdateExpenses({ categories: expenses.categories.filter((c) => c.id !== id) });
   }
 
-  function addCategory() {
-    if (!newName.trim()) return;
+  function addCategory(name: string, isOptional: boolean) {
+    if (!name.trim()) return;
     const id = `custom_${Date.now()}`;
     onUpdateExpenses({
-      categories: [...expenses.categories, { id, name: newName.trim(), monthlyAmount: 0 }],
+      categories: [...expenses.categories, { id, name: name.trim(), monthlyAmount: 0, optional: isOptional }],
     });
-    setNewName('');
   }
 
   return (
     <div>
       <PageHeader
         title="Household Expenses"
-        description="Enter actual monthly amounts for each category. The total flows directly into the projection — no spending target is assumed. Any income surplus after expenses, taxes, and retirement contributions is available to invest."
+        description="Enter monthly amounts for each category. Both required and optional expenses flow into the projection. Any income surplus after all expenses, taxes, and retirement contributions is tracked separately."
       />
       <div className="p-8 space-y-6">
         <div className="flex items-start gap-3 bg-blue-950/30 border border-blue-800/40 rounded-xl p-4">
           <Info size={16} className="text-blue-400 mt-0.5 shrink-0" />
           <div className="text-sm text-blue-200">
-            Only the mortgage ($2,537.44/month) is pre-filled from the workbook. All other categories default to $0
-            — enter your actual amounts. The app does <strong>not</strong> assume money not allocated here is spent;
-            unallocated surplus is tracked separately and flows to brokerage accounts.
+            Only the mortgage is pre-filled. All other categories default to $0 — enter your actual amounts.
+            <strong> Optional expenses</strong> are things you could cut if needed; both sections reduce your investable surplus equally in the model.
           </div>
         </div>
 
-        <Card title="Monthly Expense Categories">
+        {/* Summary totals */}
+        <div className="grid grid-cols-3 gap-4">
+          <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
+            <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">Required / month</div>
+            <div className="text-2xl font-bold text-white">{formatCurrency(requiredMonthly)}</div>
+            <div className="text-xs text-gray-600 mt-1">{formatCurrency(requiredMonthly * 12)} / yr</div>
+          </div>
+          <div className="bg-gray-900 border border-amber-900/30 rounded-xl p-5">
+            <div className="text-xs text-amber-600 uppercase tracking-wide mb-1">Optional / month</div>
+            <div className="text-2xl font-bold text-amber-400">{formatCurrency(optionalMonthly)}</div>
+            <div className="text-xs text-gray-600 mt-1">{formatCurrency(optionalMonthly * 12)} / yr</div>
+          </div>
+          <div className="bg-gray-900 border border-indigo-900/30 rounded-xl p-5">
+            <div className="text-xs text-indigo-400 uppercase tracking-wide mb-1">Total / month</div>
+            <div className="text-2xl font-bold text-indigo-300">{formatCurrency(totalMonthly)}</div>
+            <div className="text-xs text-gray-600 mt-1">{formatCurrency(totalAnnual)} / yr</div>
+          </div>
+        </div>
+
+        {/* Required expenses */}
+        <Card title="Required Expenses" subtitle="Fixed obligations — mortgage, bills, groceries, insurance.">
           <div className="space-y-2">
-            {expenses.categories.map((cat) => (
+            {required.map((cat) => (
               <ExpenseCategoryRow
                 key={cat.id}
                 category={cat}
                 onChange={(amount) => updateCategory(cat.id, amount)}
-                onRemove={
-                  !['mortgage', 'utilities', 'groceries', 'transportation', 'insurance', 'dining', 'subscriptions', 'debt', 'other'].includes(cat.id)
-                    ? () => removeCategory(cat.id)
-                    : undefined
-                }
+                onRemove={!LOCKED_IDS.has(cat.id) ? () => removeCategory(cat.id) : undefined}
               />
             ))}
           </div>
-
-          {/* Add custom category */}
           <div className="mt-4 flex gap-2">
             <input
               type="text"
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && addCategory()}
-              placeholder="New expense category name..."
+              value={newRequired}
+              onChange={(e) => setNewRequired(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') { addCategory(newRequired, false); setNewRequired(''); } }}
+              placeholder="Add required expense..."
               className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-indigo-500"
             />
             <button
-              onClick={addCategory}
+              onClick={() => { addCategory(newRequired, false); setNewRequired(''); }}
               className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm font-medium transition-colors"
             >
               <Plus size={14} /> Add
@@ -89,17 +113,36 @@ export function Expenses({ expenses, spendingGrowthRate, onUpdateExpenses, onUpd
           </div>
         </Card>
 
-        {/* Totals */}
-        <div className="grid grid-cols-2 gap-4">
-          <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-            <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">Total Monthly</div>
-            <div className="text-2xl font-bold text-white">{formatCurrency(totalMonthly)}</div>
+        {/* Optional expenses */}
+        <Card title="Optional Expenses" subtitle="Lifestyle spending you could reduce or cut — dining, travel, entertainment.">
+          <div className="space-y-2">
+            {optional.map((cat) => (
+              <ExpenseCategoryRow
+                key={cat.id}
+                category={cat}
+                onChange={(amount) => updateCategory(cat.id, amount)}
+                onRemove={!LOCKED_IDS.has(cat.id) ? () => removeCategory(cat.id) : undefined}
+                accent
+              />
+            ))}
           </div>
-          <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-            <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">Total Annual</div>
-            <div className="text-2xl font-bold text-white">{formatCurrency(totalAnnual)}</div>
+          <div className="mt-4 flex gap-2">
+            <input
+              type="text"
+              value={newOptional}
+              onChange={(e) => setNewOptional(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') { addCategory(newOptional, true); setNewOptional(''); } }}
+              placeholder="Add optional expense..."
+              className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-amber-600"
+            />
+            <button
+              onClick={() => { addCategory(newOptional, true); setNewOptional(''); }}
+              className="flex items-center gap-1.5 px-4 py-2 bg-amber-700 hover:bg-amber-600 text-white rounded-lg text-sm font-medium transition-colors"
+            >
+              <Plus size={14} /> Add
+            </button>
           </div>
-        </div>
+        </Card>
 
         {/* Spending growth assumption */}
         <Card title="Annual Spending Growth">
@@ -132,20 +175,23 @@ function ExpenseCategoryRow({
   category,
   onChange,
   onRemove,
+  accent = false,
 }: {
   category: ExpenseCategory;
   onChange: (amount: number) => void;
   onRemove?: () => void;
+  accent?: boolean;
 }) {
   const [local, setLocal] = useState<string | null>(null);
   const display = local !== null ? local : (category.monthlyAmount || '');
+  const focusBorder = accent ? 'focus-within:border-amber-600' : 'focus-within:border-indigo-500';
 
   return (
     <div className="flex items-center gap-3 py-2 border-b border-gray-800/50 last:border-0">
-      <div className="flex-1 text-sm text-gray-300">{category.name}</div>
+      <div className={`flex-1 text-sm ${accent ? 'text-amber-200/80' : 'text-gray-300'}`}>{category.name}</div>
       {category.note && <div className="text-xs text-gray-600 hidden lg:block">{category.note}</div>}
       <div className="w-36">
-        <div className="flex rounded-lg overflow-hidden border border-gray-700 focus-within:border-indigo-500">
+        <div className={`flex rounded-lg overflow-hidden border border-gray-700 ${focusBorder}`}>
           <span className="flex items-center px-2 bg-gray-800 text-gray-500 text-sm border-r border-gray-700">$</span>
           <input
             type="text"

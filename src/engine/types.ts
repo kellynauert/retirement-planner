@@ -43,6 +43,8 @@ export interface ExpenseCategory {
   name: string;
   monthlyAmount: number;
   note?: string;
+  /** If true, appears in the "Optional" section; false/undefined = required */
+  optional?: boolean;
 }
 
 export interface HouseholdExpenses {
