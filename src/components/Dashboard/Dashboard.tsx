@@ -9,7 +9,7 @@ import {
   ResponsiveContainer,
   ReferenceLine,
 } from 'recharts';
-import { AlertTriangle, CheckCircle2, Clock, TrendingUp } from 'lucide-react';
+import { CheckCircle2, Clock, TrendingUp } from 'lucide-react';
 import type { AppState } from '../../engine/types';
 import { formatCompact, formatCurrency } from '../../engine/formatters';
 import { runAllScenarios, computeHouseholdFireMilestones, computeMonthlyExpenses } from '../../engine/calculator';
@@ -69,22 +69,6 @@ export function Dashboard({ state }: DashboardProps) {
       />
 
       <div className="p-8 space-y-6">
-        {/* Warning banners */}
-        {(!p1TargetSet || !p2TargetSet) && (
-          <div className="flex items-start gap-3 bg-amber-950/40 border border-amber-700/40 rounded-xl p-4">
-            <AlertTriangle size={18} className="text-amber-400 mt-0.5 shrink-0" />
-            <div className="text-sm text-amber-200">
-              <strong>Portfolio targets not set.</strong> Go to{' '}
-              <span className="underline underline-offset-2">Retirement Goals</span> to set individual targets for{' '}
-              {!p1TargetSet && !p2TargetSet
-                ? 'both people'
-                : !p1TargetSet
-                ? 'Person 1'
-                : 'Person 2'}
-              .
-            </div>
-          </div>
-        )}
 
         {/* Key stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -152,7 +136,7 @@ export function Dashboard({ state }: DashboardProps) {
                     </div>
                   )
                 ) : (
-                  <div className="text-xs text-gray-500">Set a portfolio target in Retirement Goals</div>
+                  <div className="text-xs text-gray-500">No individual target set</div>
                 )}
               </div>
             </div>
@@ -194,7 +178,7 @@ export function Dashboard({ state }: DashboardProps) {
                     </div>
                   )
                 ) : (
-                  <div className="text-xs text-gray-500">Set a portfolio target in Retirement Goals</div>
+                  <div className="text-xs text-gray-500">No individual target set</div>
                 )}
               </div>
             </div>
