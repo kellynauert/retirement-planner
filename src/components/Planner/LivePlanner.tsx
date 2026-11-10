@@ -11,20 +11,24 @@ import {
   ReferenceLine,
   Label,
 } from 'recharts';
-import type { AppState } from '../../engine/types';
+import type { AppState, FutureMortgageInputs, MortgageInputs } from '../../engine/types';
 import {
   runProjection,
   computeMonthlyExpenses,
   computeHouseholdFireMilestones,
 } from '../../engine/calculator';
+import { simulateMortgage } from '../../engine/mortgage';
 import { formatCurrency, formatCompact } from '../../engine/formatters';
 import { PageHeader } from '../Layout/PageHeader';
+import { NumericInput } from '../Layout/FormField';
 
 interface LivePlannerProps {
   state: AppState;
   onUpdatePerson1: (updates: Partial<AppState['person1']>) => void;
   onUpdatePerson2: (updates: Partial<AppState['person2']>) => void;
   onUpdateAssumptions: (updates: Partial<AppState['assumptions']>) => void;
+  onUpdateMortgage: (updates: Partial<MortgageInputs>) => void;
+  onUpdateFutureMortgage: (updates: Partial<FutureMortgageInputs>) => void;
 }
 
 const FIRE_COLORS: Record<string, string> = {
@@ -35,7 +39,14 @@ const FIRE_COLORS: Record<string, string> = {
   very_conservative: '#ef4444',
 };
 
-export function LivePlanner({ state, onUpdatePerson1, onUpdatePerson2, onUpdateAssumptions }: LivePlannerProps) {
+export function LivePlanner({
+  state,
+  onUpdatePerson1,
+  onUpdatePerson2,
+  onUpdateAssumptions,
+  onUpdateMortgage,
+  onUpdateFutureMortgage,
+}: LivePlannerProps) {
   const p1FinalYear = state.person1.finalWorkingYear;
   const p2FinalYear = state.person2.finalWorkingYear;
   const surplusPct = Math.round(state.assumptions.surplusInvestedFraction * 100);
@@ -45,6 +56,18 @@ export function LivePlanner({ state, onUpdatePerson1, onUpdatePerson2, onUpdateA
   const endYear = startYear + state.assumptions.projectionLength;
 
   const rows = useMemo(() => runProjection(state), [state]);
+  const mortgageSim = useMemo(
+    () =>
+      simulateMortgage({
+        projectionStartYear: state.assumptions.projectionStartYear,
+        yearCount: state.assumptions.projectionLength + 1,
+        mortgage: state.mortgage,
+        future: state.futureMortgage,
+        flatMonthlyPayment: state.expenses.categories.find((c) => c.id === 'mortgage')?.monthlyAmount ?? 0,
+        spendingGrowthRate: state.assumptions.annualSpendingGrowth,
+      }),
+    [state],
+  );
 
   const baseAnnual = computeMonthlyExpenses(state.expenses.categories) * 12;
 
@@ -183,6 +206,57 @@ export function LivePlanner({ state, onUpdatePerson1, onUpdatePerson2, onUpdateA
             onChange={(pct) => onUpdateAssumptions({ surplusInvestedFraction: pct / 100 })}
           />
 
+          <div className="space-y-4">
+            <div className="text-xs font-semibold text-gray-400 uppercase tracking-widest">Mortgage</div>
+            <SliderField
+              label="Extra principal / month"
+              value={state.mortgage.extraMonthlyPayment}
+              min={0}
+              max={Math.max(3000, state.mortgage.extraMonthlyPayment)}
+              step={50}
+              format={(v) => formatCurrency(v)}
+              sub={state.mortgage.currentBalance > 0 ? `${formatCurrency(mortgageSim.contractualPayment + state.mortgage.extraMonthlyPayment)} / mo total` : 'Set a balance to calculate payoff'}
+              color="#f43f5e"
+              onChange={(amount) => onUpdateMortgage({ extraMonthlyPayment: amount })}
+            />
+            <label className="block text-xs text-gray-500">Remaining balance</label>
+            <NumericInput
+              prefix="$"
+              value={state.mortgage.currentBalance || ''}
+              placeholder="0"
+              onCommit={(v) => onUpdateMortgage({ currentBalance: Math.max(0, parseFloat(v.replace(/,/g, '')) || 0) })}
+            />
+            <button
+              type="button"
+              onClick={() => onUpdateFutureMortgage({ enabled: !state.futureMortgage.enabled })}
+              className={`w-full py-2 rounded-lg text-xs font-medium ${state.futureMortgage.enabled ? 'bg-indigo-600 text-white' : 'bg-gray-800 text-gray-300'}`}
+            >
+              Next mortgage {state.futureMortgage.enabled ? 'on' : 'off'}
+            </button>
+            {state.futureMortgage.enabled && (
+              <>
+                <SliderField
+                  label="Next mortgage starts"
+                  value={state.futureMortgage.startYear}
+                  min={startYear}
+                  max={endYear}
+                  step={1}
+                  format={(v) => v.toString()}
+                  sub="Paid-down principal reduces the new loan"
+                  color="#a78bfa"
+                  onChange={(year) => onUpdateFutureMortgage({ startYear: year })}
+                />
+                <label className="block text-xs text-gray-500">Purchase price</label>
+                <NumericInput
+                  prefix="$"
+                  value={state.futureMortgage.purchasePrice || ''}
+                  placeholder="0"
+                  onCommit={(v) => onUpdateFutureMortgage({ purchasePrice: Math.max(0, parseFloat(v.replace(/,/g, '')) || 0) })}
+                />
+              </>
+            )}
+          </div>
+
           {/* FIRE milestone legend */}
           <div>
             <label className="block text-xs font-semibold text-gray-400 uppercase tracking-widest mb-3">
@@ -245,6 +319,41 @@ export function LivePlanner({ state, onUpdatePerson1, onUpdatePerson2, onUpdateA
               monthly={Math.max(0, annualSpendable / 12)}
               valueClass={annualSpendable > 0 ? 'text-sky-400' : 'text-gray-500'}
             />
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 border-b border-gray-800 min-w-0">
+            <div className="min-w-0 overflow-hidden p-4 sm:p-6 border-b md:border-b-0 md:border-r border-gray-800">
+              <div className="text-xs text-gray-500 uppercase tracking-widest mb-2">Mortgage payoff</div>
+              <div className="font-bold text-rose-300 leading-none break-words" style={{ fontSize: 'clamp(1.5rem, 3vw, 2.5rem)' }}>
+                {state.mortgage.currentBalance <= 0
+                  ? 'Add a balance'
+                  : mortgageSim.rolledOver
+                    ? `Rolls in ${state.futureMortgage.startYear}`
+                    : (mortgageSim.currentPayoffYear ?? 'Beyond plan')}
+              </div>
+              <div className="mt-2 text-xs text-gray-500">
+                {state.mortgage.currentBalance > 0
+                  ? `${formatCurrency(mortgageSim.contractualPayment + state.mortgage.extraMonthlyPayment)} / month, then the payment drops out of expenses.`
+                  : 'The Mortgage / Rent line stays a flat bill until you enter what you owe.'}
+              </div>
+            </div>
+            <div className="min-w-0 overflow-hidden p-4 sm:p-6">
+              <div className="text-xs text-gray-500 uppercase tracking-widest mb-2">Next mortgage</div>
+              <div className="font-bold text-violet-300 leading-none break-words" style={{ fontSize: 'clamp(1.5rem, 3vw, 2.5rem)' }}>
+                {!state.futureMortgage.enabled
+                  ? 'Off'
+                  : state.futureMortgage.purchasePrice <= 0
+                    ? 'Set a price'
+                    : mortgageSim.futureStartingBalance <= 0
+                      ? 'Paid off'
+                      : (mortgageSim.futurePayoffYear ?? 'Beyond plan')}
+              </div>
+              <div className="mt-2 text-xs text-gray-500">
+                {state.futureMortgage.enabled && state.futureMortgage.purchasePrice > 0
+                  ? `${formatCurrency(mortgageSim.equityApplied)} of principal paid down comes off a ${formatCurrency(state.futureMortgage.purchasePrice)} purchase. New loan ${formatCurrency(mortgageSim.futureStartingBalance)}.`
+                  : 'Turn it on and set a purchase price. Principal you have paid down reduces the new loan.'}
+              </div>
+            </div>
           </div>
 
           {/* Deficit warning */}
@@ -351,6 +460,16 @@ export function LivePlanner({ state, onUpdatePerson1, onUpdatePerson2, onUpdateA
                       style={{ fill: '#10b981', fontSize: 10 }}
                     />
                   </ReferenceLine>
+                  {mortgageSim.currentPayoffYear && (
+                    <ReferenceLine x={mortgageSim.currentPayoffYear} stroke="#fb7185" strokeDasharray="3 3" strokeOpacity={0.8}>
+                      <Label value="Mortgage paid off" position="insideTopLeft" style={{ fill: '#fb7185', fontSize: 10 }} />
+                    </ReferenceLine>
+                  )}
+                  {state.futureMortgage.enabled && mortgageSim.futurePayoffYear && (
+                    <ReferenceLine x={mortgageSim.futurePayoffYear} stroke="#a78bfa" strokeDasharray="3 3" strokeOpacity={0.8}>
+                      <Label value="New mortgage paid off" position="insideTopLeft" style={{ fill: '#a78bfa', fontSize: 10 }} />
+                    </ReferenceLine>
+                  )}
 
                   <Area
                     type="monotone"

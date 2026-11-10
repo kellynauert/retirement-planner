@@ -22,6 +22,8 @@ export default function App() {
     updatePerson1,
     updatePerson2,
     updateExpenses,
+    updateMortgage,
+    updateFutureMortgage,
     updateAssumptions,
     resetToDefaults,
     selectScenario,
@@ -52,6 +54,8 @@ export default function App() {
             onUpdatePerson1={updatePerson1}
             onUpdatePerson2={updatePerson2}
             onUpdateAssumptions={updateAssumptions}
+            onUpdateMortgage={updateMortgage}
+            onUpdateFutureMortgage={updateFutureMortgage}
           />
         );
       case 'income':
@@ -67,9 +71,15 @@ export default function App() {
         return (
           <Expenses
             expenses={state.expenses}
+            mortgage={state.mortgage}
+            futureMortgage={state.futureMortgage}
+            projectionStartYear={state.assumptions.projectionStartYear}
+            projectionLength={state.assumptions.projectionLength}
             spendingGrowthRate={state.assumptions.annualSpendingGrowth}
             onUpdateExpenses={updateExpenses}
             onUpdateSpendingGrowth={(rate) => updateAssumptions({ annualSpendingGrowth: rate })}
+            onUpdateMortgage={updateMortgage}
+            onUpdateFutureMortgage={updateFutureMortgage}
           />
         );
       case 'projections':

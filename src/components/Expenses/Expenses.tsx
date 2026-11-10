@@ -1,10 +1,12 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Plus, Trash2, Info } from 'lucide-react';
-import type { ExpenseCategory, HouseholdExpenses } from '../../engine/types';
+import type { ExpenseCategory, FutureMortgageInputs, HouseholdExpenses, MortgageInputs } from '../../engine/types';
+import { simulateMortgage } from '../../engine/mortgage';
 import { PageHeader } from '../Layout/PageHeader';
 import { Card } from '../Layout/Card';
 import { FormField, NumericInput } from '../Layout/FormField';
 import { formatCurrency } from '../../engine/formatters';
+import { MortgageSection } from './MortgageSection';
 
 const LOCKED_IDS = new Set([
   'mortgage', 'utilities', 'groceries', 'transportation', 'insurance',
@@ -14,19 +16,53 @@ const LOCKED_IDS = new Set([
 
 interface ExpensesProps {
   expenses: HouseholdExpenses;
+  mortgage: MortgageInputs;
+  futureMortgage: FutureMortgageInputs;
+  projectionStartYear: number;
+  projectionLength: number;
   spendingGrowthRate: number;
   onUpdateExpenses: (expenses: HouseholdExpenses) => void;
   onUpdateSpendingGrowth: (rate: number) => void;
+  onUpdateMortgage: (updates: Partial<MortgageInputs>) => void;
+  onUpdateFutureMortgage: (updates: Partial<FutureMortgageInputs>) => void;
 }
 
-export function Expenses({ expenses, spendingGrowthRate, onUpdateExpenses, onUpdateSpendingGrowth }: ExpensesProps) {
+export function Expenses({
+  expenses,
+  mortgage,
+  futureMortgage,
+  projectionStartYear,
+  projectionLength,
+  spendingGrowthRate,
+  onUpdateExpenses,
+  onUpdateSpendingGrowth,
+  onUpdateMortgage,
+  onUpdateFutureMortgage,
+}: ExpensesProps) {
   const [newRequired, setNewRequired] = useState('');
   const [newOptional, setNewOptional] = useState('');
 
-  const required = expenses.categories.filter((c) => !c.optional);
+  const housing = useMemo(() => {
+    const sim = simulateMortgage({
+      projectionStartYear,
+      yearCount: 1,
+      mortgage,
+      future: futureMortgage,
+      flatMonthlyPayment: expenses.categories.find((c) => c.id === 'mortgage')?.monthlyAmount ?? 0,
+      spendingGrowthRate,
+    });
+    return sim.years[0];
+  }, [expenses.categories, mortgage, futureMortgage, projectionStartYear, spendingGrowthRate]);
+
+  const loanReplacesFlat = housing.loan !== 'flat';
+  const required = expenses.categories.filter((c) => !c.optional && !(loanReplacesFlat && c.id === 'mortgage'));
   const optional = expenses.categories.filter((c) => c.optional);
 
-  const requiredMonthly = required.reduce((s, c) => s + c.monthlyAmount, 0);
+  const requiredMonthly =
+    expenses.categories
+      .filter((c) => !c.optional && c.id !== 'mortgage')
+      .reduce((s, c) => s + c.monthlyAmount, 0) +
+    (housing.loanPayment + housing.escrow) / 12;
   const optionalMonthly = optional.reduce((s, c) => s + c.monthlyAmount, 0);
   const totalMonthly = requiredMonthly + optionalMonthly;
   const totalAnnual = totalMonthly * 12;
@@ -64,6 +100,17 @@ export function Expenses({ expenses, spendingGrowthRate, onUpdateExpenses, onUpd
           </div>
         </div>
 
+        <MortgageSection
+          expenses={expenses}
+          mortgage={mortgage}
+          futureMortgage={futureMortgage}
+          projectionStartYear={projectionStartYear}
+          projectionLength={projectionLength}
+          spendingGrowthRate={spendingGrowthRate}
+          onUpdateMortgage={onUpdateMortgage}
+          onUpdateFutureMortgage={onUpdateFutureMortgage}
+        />
+
         {/* Summary totals */}
         <div className="grid grid-cols-3 gap-4">
           <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
@@ -84,7 +131,14 @@ export function Expenses({ expenses, spendingGrowthRate, onUpdateExpenses, onUpd
         </div>
 
         {/* Required expenses */}
-        <Card title="Required Expenses" subtitle="Fixed obligations — mortgage, bills, groceries, insurance.">
+        <Card
+          title="Required Expenses"
+          subtitle={
+            loanReplacesFlat
+              ? 'The mortgage payment now comes from the loan above and drops out after payoff.'
+              : 'Fixed obligations. The Mortgage / Rent line is a flat bill until you enter a loan balance.'
+          }
+        >
           <div className="space-y-2">
             {required.map((cat) => (
               <ExpenseCategoryRow
