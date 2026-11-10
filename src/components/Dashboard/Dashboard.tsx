@@ -12,7 +12,7 @@ import {
 import { CheckCircle2, Clock, TrendingUp } from 'lucide-react';
 import type { AppState } from '../../engine/types';
 import { formatCompact, formatCurrency } from '../../engine/formatters';
-import { runAllScenarios, computeHouseholdFireMilestones } from '../../engine/calculator';
+import { runAllScenarios, computeHouseholdFireMilestones, projectToPlanningAge } from '../../engine/calculator';
 import { Card, StatCard } from '../Layout/Card';
 import { PageHeader } from '../Layout/PageHeader';
 
@@ -24,7 +24,7 @@ interface DashboardProps {
 export function Dashboard({ state }: DashboardProps) {
   const { person1, person2, assumptions } = state;
 
-  const { minimum, target, maximum } = runAllScenarios(state);
+  const { minimum, target, maximum } = runAllScenarios(projectToPlanningAge(state));
 
   const baseAnnual = target[0]?.householdAnnualExpenses ?? 0;
   const baseMonthly = baseAnnual / 12;
@@ -132,7 +132,7 @@ export function Dashboard({ state }: DashboardProps) {
                   ) : (
                     <div className="flex items-center gap-2 text-amber-400">
                       <Clock size={16} />
-                      <span className="text-sm">Target not reached in {assumptions.projectionLength}-year window</span>
+                      <span className="text-sm">Target not reached through age {assumptions.planningAge}</span>
                     </div>
                   )
                 ) : (
@@ -174,7 +174,7 @@ export function Dashboard({ state }: DashboardProps) {
                   ) : (
                     <div className="flex items-center gap-2 text-amber-400">
                       <Clock size={16} />
-                      <span className="text-sm">Target not reached in {assumptions.projectionLength}-year window</span>
+                      <span className="text-sm">Target not reached through age {assumptions.planningAge}</span>
                     </div>
                   )
                 ) : (

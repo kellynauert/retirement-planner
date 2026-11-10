@@ -20,6 +20,8 @@ import {
   findMilestoneYear,
   computeHouseholdFireMilestones,
   analyzeStaggeredRetirement,
+  horizonYears,
+  retirementOutlook,
 } from '../engine/calculator';
 import { DEFAULT_STATE } from '../engine/defaults';
 import type { AppState } from '../engine/types';
@@ -854,5 +856,80 @@ describe('portfolio withdrawals cannot exceed the account', () => {
     expect(row.person1Portfolio).toBe(0);
     expect(row.person2Portfolio).toBe(0);
     expect(row.cashFlowDeficit).toBeCloseTo(59000, 2);
+  });
+});
+
+describe('planning through age 90', () => {
+  it('runs the default plan through the younger person turning 90', () => {
+    expect(horizonYears(DEFAULT_STATE)).toBe(90 - DEFAULT_STATE.person2.currentAge);
+  });
+
+  it('keeps a short projection inside its requested length', () => {
+    const rows = runProjection({
+      ...DEFAULT_STATE,
+      assumptions: { ...DEFAULT_STATE.assumptions, projectionLength: 1 },
+    });
+    expect(rows).toHaveLength(2);
+  });
+
+  it('passes the first portfolio to the survivor and stops at the later death', () => {
+    const state: AppState = {
+      ...DEFAULT_STATE,
+      person1: {
+        ...DEFAULT_STATE.person1,
+        currentAge: 89,
+        finalWorkingYear: 2025,
+        baseSalary: 0,
+        contrib401kPerPaycheck: 0,
+        annualRothContrib: 0,
+        starting401kBalance: 0,
+        startingRothBalance: 40_000,
+        startingBrokerageBalance: 0,
+      },
+      person2: {
+        ...DEFAULT_STATE.person2,
+        currentAge: 88,
+        finalWorkingYear: 2025,
+        baseSalary: 0,
+        contrib401kPerPaycheck: 0,
+        annualRothContrib: 0,
+        employerMatchRate: 0,
+        starting401kBalance: 0,
+        startingRothBalance: 10_000,
+        startingBrokerageBalance: 0,
+      },
+      expenses: { categories: [{ id: 'test', name: 'Test', monthlyAmount: 10_000 / 12 }] },
+      assumptions: {
+        ...DEFAULT_STATE.assumptions,
+        projectionLength: 10,
+        planningAge: 90,
+        annualReturnRate: 0,
+        annualSpendingGrowth: 0,
+        incomeTaxRate: 0,
+        ficaRate: 0,
+        person1ExpenseShare: 0.5,
+      },
+    };
+    const rows = runProjection(state);
+    expect(rows.map((r) => r.calendarYear)).toEqual([2026, 2027, 2028]);
+
+    expect(rows[1].person1Alive).toBe(true);
+    expect(rows[1].person2Alive).toBe(true);
+    expect(rows[1].person1Withdrawal).toBeCloseTo(5_000, 2);
+    expect(rows[1].person2Withdrawal).toBeCloseTo(5_000, 2);
+    expect(rows[1].person1Portfolio).toBeCloseTo(35_000, 2);
+    expect(rows[1].person2Portfolio).toBeCloseTo(5_000, 2);
+
+    expect(rows[2].person1Alive).toBe(false);
+    expect(rows[2].person2Alive).toBe(true);
+    expect(rows[2].person1Portfolio).toBe(0);
+    expect(rows[2].person2Withdrawal).toBeCloseTo(10_000, 2);
+    expect(rows[2].person2Portfolio).toBeCloseTo(30_000, 2);
+
+    const outlook = retirementOutlook(rows, state);
+    expect(outlook.person1DeathYear).toBe(2027);
+    expect(outlook.person2DeathYear).toBe(2028);
+    expect(outlook.atPerson1Death).toBeCloseTo(40_000, 2);
+    expect(outlook.atPerson2Death).toBeCloseTo(30_000, 2);
   });
 });

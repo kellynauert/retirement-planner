@@ -130,11 +130,11 @@ export function Settings({ assumptions, onUpdate }: SettingsProps) {
                 onCommit={(v) => onUpdate({ projectionStartYear: num(v) })}
               />
             </FormField>
-            <FormField label="Projection Length (Years)" hint="Workbook default: 40 years.">
+            <FormField label="Plan through Age" hint="Each person is included through this age. The plan ends when the younger one reaches it.">
               <NumericInput
-                value={assumptions.projectionLength}
+                value={assumptions.planningAge}
                 inputMode="numeric"
-                onCommit={(v) => onUpdate({ projectionLength: num(v) })}
+                onCommit={(v) => onUpdate({ planningAge: Math.max(1, Math.round(num(v))) })}
               />
             </FormField>
             <FormField label="Default Bonus Scenario" hint="Used in Dashboard; Projections view shows all three.">

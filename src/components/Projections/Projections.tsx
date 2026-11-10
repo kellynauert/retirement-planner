@@ -17,7 +17,10 @@ import type { AppState, BonusScenario } from '../../engine/types';
 import {
   runAllScenarios,
   analyzeStaggeredRetirement,
+  projectToPlanningAge,
+  retirementOutlook,
 } from '../../engine/calculator';
+import { RetirementMoney } from '../Planner/RetirementMoney';
 import { formatCurrency, formatCompact } from '../../engine/formatters';
 import { PageHeader } from '../Layout/PageHeader';
 import { Card } from '../Layout/Card';
@@ -34,7 +37,9 @@ export function Projections({ state }: ProjectionsProps) {
 
   const { assumptions } = state;
 
-  const { minimum, target, maximum } = useMemo(() => runAllScenarios(state), [state]);
+  const planned = useMemo(() => projectToPlanningAge(state), [state]);
+  const { minimum, target, maximum } = useMemo(() => runAllScenarios(planned), [planned]);
+  const outlook = useMemo(() => retirementOutlook(target, state), [target, state]);
 
   const activeRows = viewScenario === 'minimum' ? minimum : viewScenario === 'maximum' ? maximum : target;
 
@@ -59,23 +64,34 @@ export function Projections({ state }: ProjectionsProps) {
   }, [activeRows, timeRange]);
 
   // Downsample for charts
+  const markerYears = useMemo(
+    () =>
+      new Set([
+        outlook.person1DeathYear,
+        outlook.person2DeathYear,
+        state.person1.finalWorkingYear,
+        state.person2.finalWorkingYear,
+      ]),
+    [outlook.person1DeathYear, outlook.person2DeathYear, state.person1.finalWorkingYear, state.person2.finalWorkingYear],
+  );
+
   const chartRows = useMemo(
-    () => filteredRows.filter((_, i) => i % 2 === 0),
-    [filteredRows],
+    () => filteredRows.filter((row, i) => i % 2 === 0 || markerYears.has(row.calendarYear)),
+    [filteredRows, markerYears],
   );
 
   // For scenario comparison chart (combined portfolio)
   const scenarioChartRows = useMemo(
     () =>
       (timeRange === 'all' ? target : target.filter((r) => r.yearsFromNow <= parseInt(timeRange)))
-        .filter((_, i) => i % 2 === 0)
+        .filter((row, i) => i % 2 === 0 || markerYears.has(row.calendarYear))
         .map((row) => ({
           year: row.calendarYear,
           min: Math.round(minimum[row.yearsFromNow]?.combinedPortfolio ?? 0),
           target: Math.round(row.combinedPortfolio),
           max: Math.round(maximum[row.yearsFromNow]?.combinedPortfolio ?? 0),
         })),
-    [minimum, target, maximum, timeRange],
+    [minimum, target, maximum, timeRange, markerYears],
   );
 
   function exportCSV() {
@@ -195,12 +211,14 @@ export function Projections({ state }: ProjectionsProps) {
                       : 'bg-gray-800 text-gray-400 hover:text-white'
                   }`}
                 >
-                  {r === 'all' ? `All ${assumptions.projectionLength}yr` : `${r}yr`}
+                  {r === 'all' ? `Through age ${assumptions.planningAge}` : `${r}yr`}
                 </button>
               ))}
             </div>
           </div>
         </div>
+
+        <RetirementMoney state={state} rows={activeRows} />
 
         {/* Staggered retirement analysis */}
         <Card title="Staggered Retirement Analysis" subtitle="Three distinct milestones — not interchangeable">
@@ -253,6 +271,12 @@ export function Projections({ state }: ProjectionsProps) {
                 {baseAnnual > 0 && (
                   <ReferenceLine y={baseAnnual * 25} stroke="#10b981" strokeDasharray="6 3" label={{ value: 'Trad. FIRE', fill: '#10b981', fontSize: 10 }} />
                 )}
+                {timeRange === 'all' && (
+                  <ReferenceLine x={outlook.person1DeathYear} stroke="#e2e8f0" strokeDasharray="2 3" label={{ value: `P1 age ${outlook.planningAge}`, fill: '#e2e8f0', fontSize: 10 }} />
+                )}
+                {timeRange === 'all' && outlook.person2DeathYear !== outlook.person1DeathYear && (
+                  <ReferenceLine x={outlook.person2DeathYear} stroke="#94a3b8" strokeDasharray="2 3" label={{ value: `P2 age ${outlook.planningAge}`, fill: '#94a3b8', fontSize: 10 }} />
+                )}
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -277,6 +301,12 @@ export function Projections({ state }: ProjectionsProps) {
                 )}
                 {state.person2.portfolioTarget > 0 && (
                   <ReferenceLine y={state.person2.portfolioTarget} stroke="#10b981" strokeDasharray="4 2" label={{ value: 'P2 Target', fill: '#10b981', fontSize: 9 }} />
+                )}
+                {timeRange === 'all' && (
+                  <ReferenceLine x={outlook.person1DeathYear} stroke="#e2e8f0" strokeDasharray="2 3" label={{ value: `P1 age ${outlook.planningAge}`, fill: '#e2e8f0', fontSize: 10 }} />
+                )}
+                {timeRange === 'all' && outlook.person2DeathYear !== outlook.person1DeathYear && (
+                  <ReferenceLine x={outlook.person2DeathYear} stroke="#94a3b8" strokeDasharray="2 3" label={{ value: `P2 age ${outlook.planningAge}`, fill: '#94a3b8', fontSize: 10 }} />
                 )}
                 <Area type="monotone" dataKey="p1" name="Person 1" stroke="#6366f1" fill="#6366f122" strokeWidth={2} dot={false} />
                 <Area type="monotone" dataKey="p2" name="Person 2" stroke="#10b981" fill="#10b98122" strokeWidth={2} dot={false} />

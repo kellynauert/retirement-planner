@@ -7,6 +7,7 @@ import { Expenses } from './components/Expenses/Expenses';
 import { Projections } from './components/Projections/Projections';
 import { Settings } from './components/Settings/Settings';
 import { useAppState } from './hooks/useAppState';
+import { horizonYears } from './engine/calculator';
 
 type Section = 'dashboard' | 'planner' | 'income' | 'expenses' | 'projections' | 'settings';
 
@@ -74,7 +75,7 @@ export default function App() {
             mortgage={state.mortgage}
             futureMortgage={state.futureMortgage}
             projectionStartYear={state.assumptions.projectionStartYear}
-            projectionLength={state.assumptions.projectionLength}
+            projectionLength={horizonYears(state)}
             spendingGrowthRate={state.assumptions.annualSpendingGrowth}
             onUpdateExpenses={updateExpenses}
             onUpdateSpendingGrowth={(rate) => updateAssumptions({ annualSpendingGrowth: rate })}

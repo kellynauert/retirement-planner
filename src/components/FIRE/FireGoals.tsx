@@ -5,6 +5,7 @@ import type { AppState } from '../../engine/types';
 import {
   runProjection,
   computeHouseholdFireMilestones,
+  projectToPlanningAge,
 } from '../../engine/calculator';
 import { formatCurrency, formatCompact, formatPct } from '../../engine/formatters';
 import { PageHeader } from '../Layout/PageHeader';
@@ -21,7 +22,7 @@ export function FireGoals({ state, onUpdatePerson1, onUpdatePerson2 }: FireGoals
   const { person1, person2 } = state;
   const [customWithdrawalRate, setCustomWithdrawalRate] = useState<number>(0.04);
 
-  const rows = runProjection(state);
+  const rows = runProjection(projectToPlanningAge(state));
   const baseAnnual = rows[0]?.householdAnnualExpenses ?? 0;
   const householdMilestones = computeHouseholdFireMilestones(rows, baseAnnual);
 

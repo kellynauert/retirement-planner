@@ -103,8 +103,10 @@ export interface GlobalAssumptions {
   person1ExpenseShare: number;
   /** First calendar year of the projection */
   projectionStartYear: number;
-  /** Number of years to project */
+  /** Number of years to project. The live plan runs through planningAge even if this is shorter. */
   projectionLength: number;
+  /** Age through which each person is included. The plan ends at the later of the two. */
+  planningAge: number;
   /** Selected bonus scenario for projections */
   bonusScenario: BonusScenario;
 }
@@ -157,6 +159,9 @@ export interface ProjectionRow {
 
   person1Working: boolean;
   person2Working: boolean;
+  /** False from the year after this person reaches planningAge. */
+  person1Alive: boolean;
+  person2Alive: boolean;
 
   /**
    * Total discretionary cash surplus before the invested-fraction split.

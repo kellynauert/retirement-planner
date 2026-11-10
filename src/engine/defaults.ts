@@ -97,6 +97,7 @@ export const DEFAULT_STATE: AppState = {
     person1ExpenseShare: 0.5,
     projectionStartYear: 2026,
     projectionLength: 40,
+    planningAge: 90,
     bonusScenario: 'target',
   },
 };

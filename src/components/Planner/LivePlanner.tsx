@@ -15,7 +15,11 @@ import type { AppState, FutureMortgageInputs, MortgageInputs } from '../../engin
 import {
   runProjection,
   computeHouseholdFireMilestones,
+  projectToPlanningAge,
+  deathYear,
+  horizonYears,
 } from '../../engine/calculator';
+import { RetirementMoney } from './RetirementMoney';
 import { simulateMortgage } from '../../engine/mortgage';
 import { formatCurrency, formatCompact } from '../../engine/formatters';
 import { PageHeader } from '../Layout/PageHeader';
@@ -52,14 +56,16 @@ export function LivePlanner({
   const scenario = state.assumptions.bonusScenario;
 
   const startYear = state.assumptions.projectionStartYear;
-  const endYear = startYear + state.assumptions.projectionLength;
+  const planningAge = state.assumptions.planningAge;
+  const p1DeathYear = deathYear(state.person1.currentAge, startYear, planningAge);
+  const p2DeathYear = deathYear(state.person2.currentAge, startYear, planningAge);
 
-  const rows = useMemo(() => runProjection(state), [state]);
+  const rows = useMemo(() => runProjection(projectToPlanningAge(state)), [state]);
   const mortgageSim = useMemo(
     () =>
       simulateMortgage({
         projectionStartYear: state.assumptions.projectionStartYear,
-        yearCount: state.assumptions.projectionLength + 1,
+        yearCount: horizonYears(state) + 1,
         mortgage: state.mortgage,
         future: state.futureMortgage,
         flatMonthlyPayment: state.expenses.categories.find((c) => c.id === 'mortgage')?.monthlyAmount ?? 0,
@@ -171,7 +177,7 @@ export function LivePlanner({
             label="Person 1 Retires"
             value={p1FinalYear}
             min={startYear}
-            max={endYear}
+            max={p1DeathYear}
             step={1}
             format={(v) => v.toString()}
             sub={`Age ${state.person1.currentAge + (p1FinalYear - startYear)}`}
@@ -184,7 +190,7 @@ export function LivePlanner({
             label="Person 2 Retires"
             value={p2FinalYear}
             min={startYear}
-            max={endYear}
+            max={p2DeathYear}
             step={1}
             format={(v) => v.toString()}
             sub={`Age ${state.person2.currentAge + (p2FinalYear - startYear)}`}
@@ -238,7 +244,7 @@ export function LivePlanner({
                   label="Next mortgage starts"
                   value={state.futureMortgage.startYear}
                   min={startYear}
-                  max={endYear}
+                  max={Math.max(p1DeathYear, p2DeathYear)}
                   step={1}
                   format={(v) => v.toString()}
                   sub="Paid-down principal reduces the new loan"
@@ -362,14 +368,16 @@ export function LivePlanner({
             </div>
           )}
 
+          <RetirementMoney state={state} rows={rows} />
+
           {/* Chart */}
           <div className="p-6">
             <div className="mb-4">
               <div className="text-sm font-medium text-white">
-                Combined Portfolio Growth with FIRE Targets
+                Combined Portfolio through Age {planningAge}
               </div>
               <div className="text-xs text-gray-500 mt-0.5">
-                Dashed lines show where each FIRE benchmark is reached. Hover for details.
+                Dashed lines mark FIRE targets, retirement, and age {planningAge}. Hover for details.
               </div>
             </div>
             <div className="h-[420px]">
@@ -467,6 +475,14 @@ export function LivePlanner({
                   {state.futureMortgage.enabled && mortgageSim.futurePayoffYear && (
                     <ReferenceLine x={mortgageSim.futurePayoffYear} stroke="#a78bfa" strokeDasharray="3 3" strokeOpacity={0.8}>
                       <Label value="New mortgage paid off" position="insideTopLeft" style={{ fill: '#a78bfa', fontSize: 10 }} />
+                    </ReferenceLine>
+                  )}
+                  <ReferenceLine x={p1DeathYear} stroke="#e2e8f0" strokeDasharray="2 3" strokeOpacity={0.7}>
+                    <Label value={`P1 age ${planningAge}`} position="insideTopRight" style={{ fill: '#e2e8f0', fontSize: 10 }} />
+                  </ReferenceLine>
+                  {p2DeathYear !== p1DeathYear && (
+                    <ReferenceLine x={p2DeathYear} stroke="#94a3b8" strokeDasharray="2 3" strokeOpacity={0.7}>
+                      <Label value={`P2 age ${planningAge}`} position="insideBottomRight" style={{ fill: '#94a3b8', fontSize: 10 }} />
                     </ReferenceLine>
                   )}
 

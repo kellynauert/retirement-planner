@@ -26,6 +26,12 @@
  * While either person is still working, that income covers the whole household bill.
  * Retirement accounts are not withdrawn early. Withdrawals start only after both people
  * have stopped working, split by each person's expense share.
+ *
+ * DEATH:
+ * Each person is included through planningAge (default 90). The plan ends at the later
+ * of the two. The year after someone reaches that age, their portfolio passes to the
+ * survivor. Household spending stays the same, and the survivor pays it until their own
+ * planning age.
  */
 
 import type {
@@ -132,10 +138,82 @@ export function computeAnnualSurplus(params: SurplusParams): number {
   return Math.max(0, afterExpensesAndRoth) * params.surplusInvestedFraction;
 }
 
+/** Calendar year this person reaches planningAge. */
+export function deathYear(currentAge: number, startYear: number, planningAge: number): number {
+  return startYear + Math.max(0, planningAge - currentAge);
+}
+
+/** Years from the start year through the later person's planning age. */
+export function horizonYears(state: AppState): number {
+  const start = state.assumptions.projectionStartYear;
+  const age = state.assumptions.planningAge;
+  return Math.max(
+    deathYear(state.person1.currentAge, start, age) - start,
+    deathYear(state.person2.currentAge, start, age) - start,
+  );
+}
+
+/** Projection that runs through the later planning age, and no further. */
+export function projectToPlanningAge(state: AppState): AppState {
+  const years = horizonYears(state);
+  if (state.assumptions.projectionLength === years) return state;
+  return { ...state, assumptions: { ...state.assumptions, projectionLength: years } };
+}
+
+export interface RetirementOutlook {
+  planningAge: number;
+  person1DeathYear: number;
+  person2DeathYear: number;
+  lastWorkingYear: number | null;
+  nestEgg: number | null;
+  nestEggPerson1Age: number | null;
+  nestEggPerson2Age: number | null;
+  atPerson1Death: number | null;
+  atPerson2Death: number | null;
+  lowestBalance: number | null;
+  lowestBalanceYear: number | null;
+  ranOutYear: number | null;
+}
+
+/** Portfolio balances from the last paycheck through each person's planning age. */
+export function retirementOutlook(rows: ProjectionRow[], state: AppState): RetirementOutlook {
+  const start = state.assumptions.projectionStartYear;
+  const planningAge = state.assumptions.planningAge;
+  const person1DeathYear = deathYear(state.person1.currentAge, start, planningAge);
+  const person2DeathYear = deathYear(state.person2.currentAge, start, planningAge);
+  const lastWork = Math.max(state.person1.finalWorkingYear, state.person2.finalWorkingYear);
+  const nestRow = rows.find((r) => r.calendarYear === lastWork) ?? null;
+  const retirementRows = rows.filter(
+    (r) => r.calendarYear > lastWork && (r.person1Alive || r.person2Alive),
+  );
+  let lowest: ProjectionRow | null = null;
+  for (const row of retirementRows) {
+    if (!lowest || row.combinedPortfolio < lowest.combinedPortfolio) lowest = row;
+  }
+  const ranOut = retirementRows.find(
+    (r) => r.combinedPortfolio <= 0 && r.householdAnnualExpenses > 0,
+  );
+  return {
+    planningAge,
+    person1DeathYear,
+    person2DeathYear,
+    lastWorkingYear: nestRow ? lastWork : null,
+    nestEgg: nestRow?.combinedPortfolio ?? null,
+    nestEggPerson1Age: nestRow?.person1Age ?? null,
+    nestEggPerson2Age: nestRow?.person2Age ?? null,
+    atPerson1Death: rows.find((r) => r.calendarYear === person1DeathYear)?.combinedPortfolio ?? null,
+    atPerson2Death: rows.find((r) => r.calendarYear === person2DeathYear)?.combinedPortfolio ?? null,
+    lowestBalance: lowest?.combinedPortfolio ?? null,
+    lowestBalanceYear: lowest?.calendarYear ?? null,
+    ranOutYear: ranOut?.calendarYear ?? null,
+  };
+}
+
 /**
  * Household cash flow for the year.
  * One person still working: their income pays every household expense, and neither
  * portfolio is withdrawn. Both retired: each portfolio pays its expense share.
+ * After one death, the survivor pays the full household bill.
  */
 function computeSurplusStaggered(params: {
   salary1: number;
@@ -151,6 +229,8 @@ function computeSurplusStaggered(params: {
   surplusInvestedFraction: number;
   person1Working: boolean;
   person2Working: boolean;
+  person1Alive: boolean;
+  person2Alive: boolean;
   person1ExpenseShare: number;
 }): {
   surplus: number;
@@ -159,7 +239,21 @@ function computeSurplusStaggered(params: {
   person2Withdrawal: number;
   cashFlowDeficit: number;
 } {
+  if (!params.person1Alive && !params.person2Alive) {
+    return { surplus: 0, rawSurplus: 0, person1Withdrawal: 0, person2Withdrawal: 0, cashFlowDeficit: 0 };
+  }
+
   if (!params.person1Working && !params.person2Working) {
+    const soleSurvivor = params.person1Alive !== params.person2Alive;
+    if (soleSurvivor) {
+      return {
+        surplus: 0,
+        rawSurplus: 0,
+        person1Withdrawal: params.person1Alive ? params.annualExpenses : 0,
+        person2Withdrawal: params.person2Alive ? params.annualExpenses : 0,
+        cashFlowDeficit: 0,
+      };
+    }
     const person2ExpenseShare = 1 - params.person1ExpenseShare;
     return {
       surplus: 0,
@@ -210,7 +304,7 @@ export function computeMonthlyExpenses(
 
 /**
  * Run the full year-by-year projection.
- * Returns an array of ProjectionRow, one per year from 0 to projectionLength (inclusive).
+ * Returns one row per year from 0 through the earlier of projectionLength and the later planning age.
  */
 export function runProjection(state: AppState): ProjectionRow[] {
   const { person1, person2, expenses, assumptions } = state;
@@ -224,8 +318,11 @@ export function runProjection(state: AppState): ProjectionRow[] {
     person1ExpenseShare,
     projectionStartYear,
     projectionLength,
+    planningAge,
     bonusScenario,
   } = assumptions;
+
+  const lastN = Math.min(projectionLength, horizonYears(state));
 
   const flatMortgageMonthly =
     expenses.categories.find((c) => c.id === 'mortgage')?.monthlyAmount ?? 0;
@@ -233,7 +330,7 @@ export function runProjection(state: AppState): ProjectionRow[] {
     computeMonthlyExpenses(expenses.categories.filter((c) => c.id !== 'mortgage')) * 12;
   const mortgageSim = simulateMortgage({
     projectionStartYear,
-    yearCount: projectionLength + 1,
+    yearCount: lastN + 1,
     mortgage: state.mortgage,
     future: state.futureMortgage,
     flatMonthlyPayment: flatMortgageMonthly,
@@ -265,8 +362,10 @@ export function runProjection(state: AppState): ProjectionRow[] {
   const year0Expenses = expensesForYear(0);
   const year0Housing = mortgageSim.years[0];
   const calYear0 = projectionStartYear;
-  const p1Working0 = isWorking(calYear0, projectionStartYear, 0, person1.finalWorkingYear);
-  const p2Working0 = isWorking(calYear0, projectionStartYear, 0, person2.finalWorkingYear);
+  const p1Alive0 = person1.currentAge <= planningAge;
+  const p2Alive0 = person2.currentAge <= planningAge;
+  const p1Working0 = p1Alive0 && isWorking(calYear0, projectionStartYear, 0, person1.finalWorkingYear);
+  const p2Working0 = p2Alive0 && isWorking(calYear0, projectionStartYear, 0, person2.finalWorkingYear);
 
   const salary1_0 = p1Working0 ? computeSalary(person1.baseSalary, person1.salaryGrowthRate, 0) : 0;
   const salary2_0 = p2Working0 ? computeSalary(person2.baseSalary, person2.salaryGrowthRate, 0) : 0;
@@ -298,6 +397,8 @@ export function runProjection(state: AppState): ProjectionRow[] {
     mortgageLoan: year0Housing.loan,
     person1Working: p1Working0,
     person2Working: p2Working0,
+    person1Alive: p1Alive0,
+    person2Alive: p2Alive0,
     annualDiscretionarySurplus: 0,
     annualSurplusBeforeInvest: 0,
     monthlyDiscretionarySurplus: 0,
@@ -306,12 +407,24 @@ export function runProjection(state: AppState): ProjectionRow[] {
     cashFlowDeficit: 0,
   });
 
-  for (let n = 1; n <= projectionLength; n++) {
+  for (let n = 1; n <= lastN; n++) {
     const calYear = projectionStartYear + n;
     const prevRow = rows[n - 1];
+    const p1Alive = person1.currentAge + n <= planningAge;
+    const p2Alive = person2.currentAge + n <= planningAge;
 
-    const p1Working = isWorking(calYear, projectionStartYear, n, person1.finalWorkingYear);
-    const p2Working = isWorking(calYear, projectionStartYear, n, person2.finalWorkingYear);
+    let prior1 = prevRow.person1Portfolio;
+    let prior2 = prevRow.person2Portfolio;
+    if (!p1Alive && p2Alive) {
+      prior2 += prior1;
+      prior1 = 0;
+    } else if (!p2Alive && p1Alive) {
+      prior1 += prior2;
+      prior2 = 0;
+    }
+
+    const p1Working = p1Alive && isWorking(calYear, projectionStartYear, n, person1.finalWorkingYear);
+    const p2Working = p2Alive && isWorking(calYear, projectionStartYear, n, person2.finalWorkingYear);
 
     const salary1 = p1Working ? computeSalary(person1.baseSalary, person1.salaryGrowthRate, n) : 0;
     const salary2 = p2Working ? computeSalary(person2.baseSalary, person2.salaryGrowthRate, n) : 0;
@@ -344,20 +457,29 @@ export function runProjection(state: AppState): ProjectionRow[] {
         surplusInvestedFraction,
         person1Working: p1Working,
         person2Working: p2Working,
+        person1Alive: p1Alive,
+        person2Alive: p2Alive,
         person1ExpenseShare,
       });
 
-    const brokerage1 = surplus * person1SurplusShare;
-    const brokerage2 = surplus * (1 - person1SurplusShare);
+    let brokerage1 = surplus * person1SurplusShare;
+    let brokerage2 = surplus * (1 - person1SurplusShare);
+    if (!p1Alive) {
+      brokerage2 += brokerage1;
+      brokerage1 = 0;
+    } else if (!p2Alive) {
+      brokerage1 += brokerage2;
+      brokerage2 = 0;
+    }
 
     const settled1 = settlePortfolio(
-      prevRow.person1Portfolio,
+      prior1,
       annualReturnRate,
       contrib401k1 + match401k1 + roth1 + brokerage1,
       person1Withdrawal,
     );
     const settled2 = settlePortfolio(
-      prevRow.person2Portfolio,
+      prior2,
       annualReturnRate,
       contrib401k2 + match401k2 + roth2 + brokerage2,
       person2Withdrawal,
@@ -393,6 +515,8 @@ export function runProjection(state: AppState): ProjectionRow[] {
       mortgageLoan: housing.loan,
       person1Working: p1Working,
       person2Working: p2Working,
+      person1Alive: p1Alive,
+      person2Alive: p2Alive,
       annualDiscretionarySurplus: rawSurplus,
       annualSurplusBeforeInvest: surplus,
       monthlyDiscretionarySurplus: rawSurplus / 12,
