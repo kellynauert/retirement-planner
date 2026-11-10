@@ -660,6 +660,27 @@ describe('workbook cross-check: year 1 with default values', () => {
     const expected = baseAnnual * 1.035;
     expect(year1.householdAnnualExpenses).toBeCloseTo(expected, 0);
   });
+
+  it('year-1 surplus and portfolios match the workbook formulas', () => {
+    const salary1 = 195000 * 1.05;
+    const salary2 = 95000 * 1.03;
+    const bonus1 = salary1 * 0.25;
+    const contrib401k1 = 24000;
+    const match2 = salary2 * 0.03;
+    const expenses = 2537.44 * 12 * 1.035;
+    const raw = Math.max(
+      0,
+      (salary1 + salary2 + bonus1 - contrib401k1) * (1 - 0.2143) -
+        (salary1 + salary2 + bonus1) * 0.0765 -
+        expenses -
+        7500 -
+        7500,
+    );
+    expect(year1.annualDiscretionarySurplus).toBeCloseTo(raw, 4);
+    expect(year1.annualSurplusBeforeInvest).toBeCloseTo(raw, 4);
+    expect(year1.person1Portfolio).toBeCloseTo(30000 * 1.07 + contrib401k1 + 7500 + raw * 0.5, 4);
+    expect(year1.person2Portfolio).toBeCloseTo(match2 + 7500 + raw * 0.5, 4);
+  });
 });
 
 // ─── analyzeStaggeredRetirement ──────────────────────────────────────────────
@@ -714,5 +735,79 @@ describe('analyzeStaggeredRetirement', () => {
     const rows = runProjection(state);
     const analysis = analyzeStaggeredRetirement(rows, 0, 0, 0.04);
     expect(analysis.incomeShortfallYear).not.toBeNull();
+  });
+
+  it('flags a shortfall when person 2 retires first', () => {
+    const state: AppState = {
+      ...DEFAULT_STATE,
+      person1: {
+        ...DEFAULT_STATE.person1,
+        finalWorkingYear: 2050,
+        baseSalary: 20000,
+        contrib401kPerPaycheck: 0,
+        annualRothContrib: 0,
+      },
+      person2: {
+        ...DEFAULT_STATE.person2,
+        finalWorkingYear: 2026,
+        baseSalary: 100,
+        contrib401kPerPaycheck: 0,
+        annualRothContrib: 0,
+        employerMatchRate: 0,
+      },
+      expenses: { categories: [{ id: 'test', name: 'Test', monthlyAmount: 100000 / 12 }] },
+      assumptions: {
+        ...DEFAULT_STATE.assumptions,
+        projectionLength: 2,
+        incomeTaxRate: 0,
+        ficaRate: 0,
+        annualSpendingGrowth: 0,
+      },
+    };
+    const rows = runProjection(state);
+    const analysis = analyzeStaggeredRetirement(rows, 0, 0, 0.04);
+    expect(rows[1].cashFlowDeficit).toBeGreaterThan(0);
+    expect(analysis.incomeShortfallYear).toBe(2027);
+  });
+});
+
+describe('portfolio withdrawals cannot exceed the account', () => {
+  it('records the unpaid withdrawal as a deficit instead of a negative balance', () => {
+    const state: AppState = {
+      ...DEFAULT_STATE,
+      person1: {
+        ...DEFAULT_STATE.person1,
+        finalWorkingYear: 2026,
+        baseSalary: 0,
+        contrib401kPerPaycheck: 0,
+        annualRothContrib: 0,
+        startingRothBalance: 1000,
+      },
+      person2: {
+        ...DEFAULT_STATE.person2,
+        finalWorkingYear: 2026,
+        baseSalary: 0,
+        contrib401kPerPaycheck: 0,
+        annualRothContrib: 0,
+        employerMatchRate: 0,
+        startingRothBalance: 0,
+      },
+      expenses: { categories: [{ id: 'test', name: 'Test', monthlyAmount: 5000 }] },
+      assumptions: {
+        ...DEFAULT_STATE.assumptions,
+        projectionLength: 1,
+        annualReturnRate: 0,
+        annualSpendingGrowth: 0,
+        incomeTaxRate: 0,
+        ficaRate: 0,
+      },
+    };
+    const row = runProjection(state)[1];
+    expect(row.householdAnnualExpenses).toBeCloseTo(60000, 2);
+    expect(row.person1Withdrawal).toBeCloseTo(1000, 2);
+    expect(row.person2Withdrawal).toBe(0);
+    expect(row.person1Portfolio).toBe(0);
+    expect(row.person2Portfolio).toBe(0);
+    expect(row.cashFlowDeficit).toBeCloseTo(59000, 2);
   });
 });

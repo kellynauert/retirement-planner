@@ -12,7 +12,7 @@ import {
 import { CheckCircle2, Clock, TrendingUp } from 'lucide-react';
 import type { AppState } from '../../engine/types';
 import { formatCompact, formatCurrency } from '../../engine/formatters';
-import { runAllScenarios, computeHouseholdFireMilestones, computeMonthlyExpenses } from '../../engine/calculator';
+import { runAllScenarios, computeHouseholdFireMilestones } from '../../engine/calculator';
 import { Card, StatCard } from '../Layout/Card';
 import { PageHeader } from '../Layout/PageHeader';
 
@@ -22,12 +22,12 @@ interface DashboardProps {
 
 
 export function Dashboard({ state }: DashboardProps) {
-  const { person1, person2, expenses, assumptions } = state;
+  const { person1, person2, assumptions } = state;
 
   const { minimum, target, maximum } = runAllScenarios(state);
 
-  const baseMonthly = computeMonthlyExpenses(expenses.categories);
-  const baseAnnual = baseMonthly * 12;
+  const baseAnnual = target[0]?.householdAnnualExpenses ?? 0;
+  const baseMonthly = baseAnnual / 12;
 
   const fireMilestones = computeHouseholdFireMilestones(target, baseAnnual);
   const traditionalFire = fireMilestones.find((m) => m.benchmark.id === 'traditional');
@@ -203,9 +203,10 @@ export function Dashboard({ state }: DashboardProps) {
             ))}
           </div>
           <p className="mt-3 text-xs text-gray-600">
-            These are accumulation benchmarks using current annual expenses as the base. They are planning
-            conventions, not guaranteed safe withdrawal rates. The model does not inflation-adjust expenses to
-            your projected retirement date — a more conservative approach would use future-dollar expenses.
+            These are accumulation benchmarks using this year's household spending, including this year's
+            housing payment. They are planning conventions, not guaranteed safe withdrawal rates. Paying the
+            mortgage off later lowers the bills in the projection, but it does not lower these targets. The
+            model also does not inflation-adjust expenses to the retirement date.
           </p>
         </Card>
 

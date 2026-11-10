@@ -128,7 +128,7 @@ export const FIRE_BENCHMARKS: FireBenchmark[] = [
   {
     id: 'fat',
     name: 'Fat FIRE',
-    expenseMultiple: 33.333,
+    expenseMultiple: 100 / 3,
     withdrawalRate: 0.03,
     description:
       'Illustrative 33.3× benchmark. Higher-spending retirement; common reference range is 30×–40× expenses.',

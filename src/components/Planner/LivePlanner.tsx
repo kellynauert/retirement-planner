@@ -14,7 +14,6 @@ import {
 import type { AppState, FutureMortgageInputs, MortgageInputs } from '../../engine/types';
 import {
   runProjection,
-  computeMonthlyExpenses,
   computeHouseholdFireMilestones,
 } from '../../engine/calculator';
 import { simulateMortgage } from '../../engine/mortgage';
@@ -69,7 +68,7 @@ export function LivePlanner({
     [state],
   );
 
-  const baseAnnual = computeMonthlyExpenses(state.expenses.categories) * 12;
+  const baseAnnual = rows[0]?.householdAnnualExpenses ?? 0;
 
   const fireMilestones = useMemo(
     () => computeHouseholdFireMilestones(rows, baseAnnual),

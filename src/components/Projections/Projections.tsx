@@ -16,7 +16,6 @@ import { Download } from 'lucide-react';
 import type { AppState, BonusScenario } from '../../engine/types';
 import {
   runAllScenarios,
-  computeMonthlyExpenses,
   analyzeStaggeredRetirement,
 } from '../../engine/calculator';
 import { formatCurrency, formatCompact } from '../../engine/formatters';
@@ -39,7 +38,7 @@ export function Projections({ state }: ProjectionsProps) {
 
   const activeRows = viewScenario === 'minimum' ? minimum : viewScenario === 'maximum' ? maximum : target;
 
-  const baseAnnual = computeMonthlyExpenses(state.expenses.categories) * 12;
+  const baseAnnual = activeRows[0]?.householdAnnualExpenses ?? 0;
 
   const staggeredAnalysis = useMemo(
     () =>
@@ -227,9 +226,9 @@ export function Projections({ state }: ProjectionsProps) {
           </div>
           {staggeredAnalysis.incomeShortfallYear && (
             <div className="mt-4 p-3 bg-red-950/30 border border-red-800/40 rounded-lg text-sm text-red-300">
-              ⚠ Income shortfall detected starting {staggeredAnalysis.incomeShortfallYear}: after one person retires,
-              the remaining person's income does not fully cover their share of household expenses. Consider
-              portfolio withdrawals, expense reduction, or delayed retirement.
+              Spending is not fully covered starting {staggeredAnalysis.incomeShortfallYear}. The working person's
+              income is short of their share, or a retirement withdrawal is larger than that portfolio. The gap
+              is not taken from the other portfolio.
             </div>
           )}
         </Card>

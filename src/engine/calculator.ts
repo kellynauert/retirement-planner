@@ -4,8 +4,9 @@
  * TIMING CONVENTION (matches the workbook):
  * - Year 0 is the current year (projectionStartYear). Portfolio values in year 0 are
  *   starting balances only — no contributions and no growth are applied yet.
- * - In year n ≥ 1, contributions for that year are added, then investment growth is
- *   applied to (prior balance + contributions). This is an end-of-year contribution model.
+ * - In year n ≥ 1, growth is applied to the prior balance only, then that year's
+ *   contributions are added and withdrawals are subtracted. Contributions do not
+ *   earn a return in the year they are made. This matches workbook columns O and P.
  *
  * SALARY GROWTH:
  *   salary[n] = baseSalary × (1 + growthRate)^n
@@ -216,6 +217,26 @@ function computeSurplusStaggered(params: {
   return { surplus, rawSurplus, person1Withdrawal: 0, person2Withdrawal: 0, cashFlowDeficit: 0 };
 }
 
+/**
+ * Grow last year's balance, then add this year's contributions and pay as much of
+ * the requested withdrawal as the account can cover. Anything unpaid is a shortfall
+ * rather than a negative balance.
+ */
+function settlePortfolio(
+  prior: number,
+  annualReturnRate: number,
+  additions: number,
+  requestedWithdrawal: number,
+): { balance: number; withdrawal: number; unfunded: number } {
+  const available = prior * (1 + annualReturnRate) + additions;
+  const withdrawal = Math.min(Math.max(0, requestedWithdrawal), Math.max(0, available));
+  return {
+    balance: Math.max(0, available - withdrawal),
+    withdrawal,
+    unfunded: Math.max(0, requestedWithdrawal - withdrawal),
+  };
+}
+
 /** Build the annual monthly expenses total from categories. */
 export function computeMonthlyExpenses(
   categories: { monthlyAmount: number }[],
@@ -365,22 +386,21 @@ export function runProjection(state: AppState): ProjectionRow[] {
     const brokerage1 = surplus * person1SurplusShare;
     const brokerage2 = surplus * (1 - person1SurplusShare);
 
-    // Portfolio grows on prior balance + contributions − withdrawals
-    const portfolio1 =
-      prevRow.person1Portfolio * (1 + annualReturnRate) +
-      contrib401k1 +
-      match401k1 +
-      roth1 +
-      brokerage1 -
-      person1Withdrawal;
-
-    const portfolio2 =
-      prevRow.person2Portfolio * (1 + annualReturnRate) +
-      contrib401k2 +
-      match401k2 +
-      roth2 +
-      brokerage2 -
-      person2Withdrawal;
+    const settled1 = settlePortfolio(
+      prevRow.person1Portfolio,
+      annualReturnRate,
+      contrib401k1 + match401k1 + roth1 + brokerage1,
+      person1Withdrawal,
+    );
+    const settled2 = settlePortfolio(
+      prevRow.person2Portfolio,
+      annualReturnRate,
+      contrib401k2 + match401k2 + roth2 + brokerage2,
+      person2Withdrawal,
+    );
+    const portfolio1 = settled1.balance;
+    const portfolio2 = settled2.balance;
+    const fundedDeficit = cashFlowDeficit + settled1.unfunded + settled2.unfunded;
 
     rows.push({
       yearsFromNow: n,
@@ -398,9 +418,9 @@ export function runProjection(state: AppState): ProjectionRow[] {
       person2RothContrib: roth2,
       person1BrokerageContrib: brokerage1,
       person2BrokerageContrib: brokerage2,
-      person1Portfolio: Math.max(0, portfolio1),
-      person2Portfolio: Math.max(0, portfolio2),
-      combinedPortfolio: Math.max(0, portfolio1) + Math.max(0, portfolio2),
+      person1Portfolio: portfolio1,
+      person2Portfolio: portfolio2,
+      combinedPortfolio: portfolio1 + portfolio2,
       person1TargetHit: person1.portfolioTarget > 0 && portfolio1 >= person1.portfolioTarget,
       person2TargetHit: person2.portfolioTarget > 0 && portfolio2 >= person2.portfolioTarget,
       householdAnnualExpenses: annualExpenses,
@@ -412,9 +432,9 @@ export function runProjection(state: AppState): ProjectionRow[] {
       annualDiscretionarySurplus: rawSurplus,
       annualSurplusBeforeInvest: surplus,
       monthlyDiscretionarySurplus: rawSurplus / 12,
-      person1Withdrawal,
-      person2Withdrawal,
-      cashFlowDeficit,
+      person1Withdrawal: settled1.withdrawal,
+      person2Withdrawal: settled2.withdrawal,
+      cashFlowDeficit: fundedDeficit,
     });
   }
 
@@ -551,18 +571,18 @@ export function analyzeStaggeredRetirement(
   const person2FinalWorkingYear =
     rows.filter((r) => r.person2Working).at(-1)?.calendarYear ?? rows[0].calendarYear;
 
-  // Find year person 2 income alone can cover expenses after person 1 retires
+  // A shortfall counts whichever person retires first, and also after both have stopped.
   let householdCapableAfterPerson1Retires: number | null = null;
   let incomeShortfallYear: number | null = null;
 
   for (const row of rows) {
-    if (!row.person1Working && row.person2Working) {
-      if (row.cashFlowDeficit > 0 && incomeShortfallYear === null) {
-        incomeShortfallYear = row.calendarYear;
-      }
-      if (row.cashFlowDeficit === 0 && householdCapableAfterPerson1Retires === null) {
-        householdCapableAfterPerson1Retires = row.calendarYear;
-      }
+    const oneStillWorking = row.person1Working !== row.person2Working;
+    const someoneRetired = !row.person1Working || !row.person2Working;
+    if (someoneRetired && row.cashFlowDeficit > 0 && incomeShortfallYear === null) {
+      incomeShortfallYear = row.calendarYear;
+    }
+    if (oneStillWorking && row.cashFlowDeficit === 0 && householdCapableAfterPerson1Retires === null) {
+      householdCapableAfterPerson1Retires = row.calendarYear;
     }
   }
 

@@ -4,7 +4,6 @@ import type { AppState } from '../../engine/types';
 
 import {
   runProjection,
-  computeMonthlyExpenses,
   computeHouseholdFireMilestones,
 } from '../../engine/calculator';
 import { formatCurrency, formatCompact, formatPct } from '../../engine/formatters';
@@ -19,13 +18,11 @@ interface FireGoalsProps {
 }
 
 export function FireGoals({ state, onUpdatePerson1, onUpdatePerson2 }: FireGoalsProps) {
-  const { person1, person2, expenses } = state;
+  const { person1, person2 } = state;
   const [customWithdrawalRate, setCustomWithdrawalRate] = useState<number>(0.04);
 
-  const baseMonthly = computeMonthlyExpenses(expenses.categories);
-  const baseAnnual = baseMonthly * 12;
-
   const rows = runProjection(state);
+  const baseAnnual = rows[0]?.householdAnnualExpenses ?? 0;
   const householdMilestones = computeHouseholdFireMilestones(rows, baseAnnual);
 
   const customHouseholdTarget = baseAnnual > 0 ? baseAnnual / customWithdrawalRate : 0;
