@@ -289,8 +289,8 @@ export function LivePlanner({
               <div className="text-xs text-amber-200/70">
                 {Math.abs(p1FinalYear - p2FinalYear)}-year gap.{' '}
                 {p1FinalYear < p2FinalYear
-                  ? "Person 1 retires first; their portfolio covers their expense share."
-                  : "Person 2 retires first; their portfolio covers their expense share."}
+                  ? "Person 1 retires first. Person 2's income covers household expenses until they retire too."
+                  : "Person 2 retires first. Person 1's income covers household expenses until they retire too."}
               </div>
             </div>
           )}

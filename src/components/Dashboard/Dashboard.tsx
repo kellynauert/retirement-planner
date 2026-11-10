@@ -362,7 +362,7 @@ export function Dashboard({ state }: DashboardProps) {
                   <div className="text-xs text-amber-400">
                     <TrendingUp size={12} className="inline mr-1" />
                     Staggered retirement: {Math.abs(person1.finalWorkingYear - person2.finalWorkingYear)}-year gap.
-                    During this period, one person's portfolio covers their expense share while the other continues working.
+                    During this period, the working person's income covers household expenses. Retirement accounts stay invested until both have stopped working.
                   </div>
                 </div>
               )}

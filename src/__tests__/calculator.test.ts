@@ -463,7 +463,7 @@ describe('staggered retirement: one person retires', () => {
 });
 
 describe('staggered retirement: insufficient cash flow', () => {
-  it('flags cash flow deficit when active income cannot cover their expense share', () => {
+  it('flags a deficit when the working person cannot cover the whole household bill', () => {
     // Person 1 retires; person 2 earns only $20,000, expenses are $100,000
     const state: AppState = {
       ...DEFAULT_STATE,
@@ -499,8 +499,48 @@ describe('staggered retirement: insufficient cash flow', () => {
       },
     };
     const rows = runProjection(state);
-    // Person 2 covers 50% of $100K = $50K, but only earns $20K net → deficit
-    expect(rows[1].cashFlowDeficit).toBeGreaterThan(0);
+    // Year-1 salary is $20,000 × 1.03. Income covers the whole bill; nothing is withdrawn.
+    expect(rows[1].person1Withdrawal).toBe(0);
+    expect(rows[1].person2Withdrawal).toBe(0);
+    expect(rows[1].cashFlowDeficit).toBeCloseTo(100000 - 20000 * 1.03, 2);
+  });
+
+  it('leaves the retired portfolio invested while the other person is working', () => {
+    const state: AppState = {
+      ...DEFAULT_STATE,
+      person1: {
+        ...DEFAULT_STATE.person1,
+        finalWorkingYear: 2026,
+        baseSalary: 0,
+        contrib401kPerPaycheck: 0,
+        annualRothContrib: 0,
+        startingRothBalance: 50_000,
+      },
+      person2: {
+        ...DEFAULT_STATE.person2,
+        finalWorkingYear: 2050,
+        baseSalary: 200_000,
+        contrib401kPerPaycheck: 0,
+        annualRothContrib: 0,
+        employerMatchRate: 0,
+        startingRothBalance: 0,
+      },
+      expenses: { categories: [{ id: 'test', name: 'Test', monthlyAmount: 3000 }] },
+      assumptions: {
+        ...DEFAULT_STATE.assumptions,
+        projectionLength: 1,
+        annualReturnRate: 0.07,
+        annualSpendingGrowth: 0,
+        incomeTaxRate: 0,
+        ficaRate: 0,
+        surplusInvestedFraction: 0,
+      },
+    };
+    const row = runProjection(state)[1];
+    expect(row.person1Withdrawal).toBe(0);
+    expect(row.person2Withdrawal).toBe(0);
+    expect(row.cashFlowDeficit).toBe(0);
+    expect(row.person1Portfolio).toBeCloseTo(50_000 * 1.07, 2);
   });
 });
 
@@ -744,6 +784,9 @@ describe('analyzeStaggeredRetirement', () => {
         ...DEFAULT_STATE.person1,
         finalWorkingYear: 2050,
         baseSalary: 20000,
+        minBonusPct: 0,
+        targetBonusPct: 0,
+        maxBonusPct: 0,
         contrib401kPerPaycheck: 0,
         annualRothContrib: 0,
       },
@@ -766,7 +809,9 @@ describe('analyzeStaggeredRetirement', () => {
     };
     const rows = runProjection(state);
     const analysis = analyzeStaggeredRetirement(rows, 0, 0, 0.04);
-    expect(rows[1].cashFlowDeficit).toBeGreaterThan(0);
+    expect(rows[1].person1Withdrawal).toBe(0);
+    expect(rows[1].person2Withdrawal).toBe(0);
+    expect(rows[1].cashFlowDeficit).toBeCloseTo(100000 - 20000 * 1.05, 2);
     expect(analysis.incomeShortfallYear).toBe(2027);
   });
 });

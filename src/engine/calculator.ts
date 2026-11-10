@@ -22,11 +22,10 @@
  *     − roth1 − roth2
  *   ) × surplusInvestedFraction
  *
- * STAGGERED RETIREMENT EXTENSIONS (not in workbook):
- * When a person is no longer working, their portfolio must fund their share of household
- * expenses. The app models this as an annual withdrawal from the retired person's portfolio.
- * The active person's income funds the remaining household expenses; any surplus still flows
- * to their brokerage account.
+ * STAGGERED RETIREMENT:
+ * While either person is still working, that income covers the whole household bill.
+ * Retirement accounts are not withdrawn early. Withdrawals start only after both people
+ * have stopped working, split by each person's expense share.
  */
 
 import type {
@@ -134,9 +133,9 @@ export function computeAnnualSurplus(params: SurplusParams): number {
 }
 
 /**
- * Compute surplus for a staggered retirement scenario where one person has stopped
- * working. The retired person covers their expense share from their portfolio instead
- * of employment income.
+ * Household cash flow for the year.
+ * One person still working: their income pays every household expense, and neither
+ * portfolio is withdrawn. Both retired: each portfolio pays its expense share.
  */
 function computeSurplusStaggered(params: {
   salary1: number;
@@ -160,61 +159,26 @@ function computeSurplusStaggered(params: {
   person2Withdrawal: number;
   cashFlowDeficit: number;
 } {
-  const person2ExpenseShare = 1 - params.person1ExpenseShare;
-
-  let person1Withdrawal = 0;
-  let person2Withdrawal = 0;
-  let cashFlowDeficit = 0;
-
   if (!params.person1Working && !params.person2Working) {
-    person1Withdrawal = params.annualExpenses * params.person1ExpenseShare;
-    person2Withdrawal = params.annualExpenses * person2ExpenseShare;
-    return { surplus: 0, rawSurplus: 0, person1Withdrawal, person2Withdrawal, cashFlowDeficit: 0 };
+    const person2ExpenseShare = 1 - params.person1ExpenseShare;
+    return {
+      surplus: 0,
+      rawSurplus: 0,
+      person1Withdrawal: params.annualExpenses * params.person1ExpenseShare,
+      person2Withdrawal: params.annualExpenses * person2ExpenseShare,
+      cashFlowDeficit: 0,
+    };
   }
 
-  if (!params.person1Working && params.person2Working) {
-    person1Withdrawal = params.annualExpenses * params.person1ExpenseShare;
-
-    const gross2 = params.salary2 + 0;
-    const afterTax2 =
-      (gross2 - params.contrib401k2) * (1 - params.incomeTaxRate) -
-      gross2 * params.ficaRate;
-    const person2ExpenseObligation = params.annualExpenses * person2ExpenseShare;
-    const afterExpenses2 = afterTax2 - person2ExpenseObligation - params.roth2;
-    const rawSurplus = Math.max(0, afterExpenses2);
-    const surplus = rawSurplus * params.surplusInvestedFraction;
-
-    if (afterTax2 < person2ExpenseObligation) {
-      cashFlowDeficit = person2ExpenseObligation - afterTax2;
-    }
-
-    return { surplus, rawSurplus, person1Withdrawal, person2Withdrawal: 0, cashFlowDeficit };
-  }
-
-  if (params.person1Working && !params.person2Working) {
-    person2Withdrawal = params.annualExpenses * person2ExpenseShare;
-
-    const gross1 = params.salary1 + params.bonus1;
-    const afterTax1 =
-      (gross1 - params.contrib401k1) * (1 - params.incomeTaxRate) -
-      gross1 * params.ficaRate;
-    const person1ExpenseObligation = params.annualExpenses * params.person1ExpenseShare;
-    const afterExpenses1 = afterTax1 - person1ExpenseObligation - params.roth1;
-    const rawSurplus = Math.max(0, afterExpenses1);
-    const surplus = rawSurplus * params.surplusInvestedFraction;
-
-    if (afterTax1 < person1ExpenseObligation) {
-      cashFlowDeficit = person1ExpenseObligation - afterTax1;
-    }
-
-    return { surplus, rawSurplus, person1Withdrawal: 0, person2Withdrawal, cashFlowDeficit };
-  }
-
-  // Both working — standard surplus calculation
-  const { afterExpensesAndRoth } = computeAnnualSurplusComponents(params);
+  const { afterExpensesAndRoth, takeHome } = computeAnnualSurplusComponents(params);
   const rawSurplus = Math.max(0, afterExpensesAndRoth);
   const surplus = rawSurplus * params.surplusInvestedFraction;
-  return { surplus, rawSurplus, person1Withdrawal: 0, person2Withdrawal: 0, cashFlowDeficit: 0 };
+  const someoneRetired = !params.person1Working || !params.person2Working;
+  const cashFlowDeficit =
+    someoneRetired && takeHome < params.annualExpenses
+      ? params.annualExpenses - takeHome
+      : 0;
+  return { surplus, rawSurplus, person1Withdrawal: 0, person2Withdrawal: 0, cashFlowDeficit };
 }
 
 /**

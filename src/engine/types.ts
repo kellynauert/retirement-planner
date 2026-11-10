@@ -99,7 +99,7 @@ export interface GlobalAssumptions {
   surplusInvestedFraction: number;
   /** Person 1's share of investable surplus for brokerage (rest goes to person 2) */
   person1SurplusShare: number;
-  /** Person 1's share of household expenses (for staggered retirement modeling) */
+  /** Person 1's share of household expenses once both people have stopped working. */
   person1ExpenseShare: number;
   /** First calendar year of the projection */
   projectionStartYear: number;

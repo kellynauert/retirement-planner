@@ -226,9 +226,9 @@ export function Projections({ state }: ProjectionsProps) {
           </div>
           {staggeredAnalysis.incomeShortfallYear && (
             <div className="mt-4 p-3 bg-red-950/30 border border-red-800/40 rounded-lg text-sm text-red-300">
-              Spending is not fully covered starting {staggeredAnalysis.incomeShortfallYear}. The working person's
-              income is short of their share, or a retirement withdrawal is larger than that portfolio. The gap
-              is not taken from the other portfolio.
+              Spending is not fully covered starting {staggeredAnalysis.incomeShortfallYear}. While one person is
+              still working, their income has to cover the whole household. Once both have stopped, each portfolio
+              pays its share, and a gap is the part that account cannot pay.
             </div>
           )}
         </Card>

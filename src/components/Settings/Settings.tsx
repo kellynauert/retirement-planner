@@ -110,7 +110,7 @@ export function Settings({ assumptions, onUpdate }: SettingsProps) {
             </FormField>
             <FormField
               label="Person 1 Share of Household Expenses"
-              hint="Used for staggered retirement cash flow modeling — determines how much of household expenses each person is responsible for after they stop working. Workbook default: 50%."
+              hint="Once both people have stopped working, this is each portfolio's share of the household bill. While either person is still working, their income covers the whole bill. Workbook default: 50%."
             >
               <NumericInput
                 suffix="%"
